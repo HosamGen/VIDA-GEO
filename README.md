@@ -28,7 +28,7 @@ Given an input image and a target domain, VIDA-GEO:
 1. **Scores** the image with the domain's black-box indicator model (baseline).
 2. **Plans** candidate regions to edit (reasoning VLM).
 3. **Checks policy** — classifies each region as free / constrained / remove-only /
-   skip, and emits constraints the editor must respect.
+   skip, and outputs constraints the generation agent must respect.
 4. **Segments** each region through a tool chain (text-referred segmentation →
    point-prompt fallback → bounding-box clip → best-effort), gated by a
    mask quality-control agent.
@@ -66,33 +66,10 @@ and "already-optimal" threshold.
 
 ## Architecture
 
-```
-input image
-   │
-   ▼
-[baseline score] ── black-box indicator server
-   │
-   ▼
-[Planning agent] ──► regions (label, point, seg keyword, edit type)
-   │
-   ▼
-[Policy agent] ──► per-region edit class + constraints  (feasibility gate)
-   │
-   ▼
-[Segmentation agent]  per region, early-return tool chain:
-   satellite: LISAt ─► SAM3 ─► SAM point ─► bbox-clip ─► best-effort
-   gsv:       SAM3  ─► SAM point ─► best-effort
-   (mask QC agent gates each; satellite masks pass through QC-validated smoothing)
-   │
-   ▼
-[Generation agent]  editors compete in parallel:
-   FLUX (masked inpaint: crop ROI ─► fill ─► paste back)   ┐
-   Gemini (full-image edit, mask as guidance)              ┘─► best score delta
-   (edit-QC agent gates; every candidate re-scored by the indicator model)
-   │
-   ▼
-result.json  (best candidate, all candidates, per-stage timings)
-```
+
+<p align='center'>
+<img src="assets/pipeline.png" height="400">
+</p>
 
 Two model roles, set independently:
 - **Reasoning model** (planning, policy, suggestion, QC) — OpenRouter, env
@@ -105,7 +82,7 @@ The agent environment is intentionally minimal — it talks to model servers ove
 HTTP and needs **no** deep-learning libraries.
 
 ```shell
-git clone https://github.com/<your-org>/VIDA-GEO.git
+git clone https://github.com/HosamGen/VIDA-GEO.git
 cd VIDA-GEO
 conda create -n vida-geo python=3.10 -y
 conda activate vida-geo
@@ -136,13 +113,13 @@ per-server launch commands, ports, and checkpoints. Ports must match
 | Risk scorer          | road-risk (satellite)             | 8003         | [BetaRisk](https://github.com/FOURM-LAB/BetaRisk) |
 | Greenery scorer      | greenery coverage (satellite)     | 8006         | [oem-lightweight](https://github.com/cliffbb/oem-lightweight) |
 | LISAt                | text-referred seg (satellite)     | 8001         | [LISAt_code](https://github.com/lisat-bair/LISAt_code) |
-| SAM3                 | text-referred seg (GSV)           | 8005         | [sam3](https://github.com/facebookresearch/sam3) |
+| SAM3                 | text-referred seg (all)           | 8005         | [sam3](https://github.com/facebookresearch/sam3) |
 | SAM                  | point-prompt fallback (all)       | 8004         | [segment-anything](https://github.com/facebookresearch/segment-anything) |
-| FLUX Fill            | masked inpainting editor          | 8002         | [FLUX.1-Fill-dev](https://github.com/black-forest-labs/flux) |
+| FLUX Fill            | masked inpainting editor (all)    | 8002         | [FLUX.1-Fill-dev](https://github.com/black-forest-labs/flux) |
 
 Which servers each domain needs:
 - **GSV domains:** perception (8111), SAM3 (8005), SAM (8004), FLUX (8002, unless `--disable_flux`).
-- **Satellite domains:** risk **or** greenery (8003 / 8006), LISAt (8001), SAM (8004), FLUX (8002, unless `--disable_flux`).
+- **Satellite domains:** risk **or** greenery (8003 / 8006), LISAt (8001), SAM (8004), SAM3 (8005), FLUX (8002, unless `--disable_flux`).
 
 ## Running
 
@@ -150,17 +127,17 @@ Which servers each domain needs:
 # GSV, Gemini-only (no FLUX server needed)
 python -m vida_geo.cli --image path/to/streetview.jpg --domain lively --disable_flux
 
-# GSV, both editors competing (FLUX server up on 8002)
+# GSV, both editors competing (FLUX server running)
 python -m vida_geo.cli --image path/to/streetview.jpg --domain safety
 
 # Satellite
 python -m vida_geo.cli --image path/to/tile.png --domain road_safety
 python -m vida_geo.cli --image path/to/tile.png --domain greenery
 
-# Multi-epoch and two-phase refinement
+# Multi-epoch and two-phase refinement (for sequential editing)
 python -m vida_geo.cli --image path/to/img.jpg --domain lively --max_epochs 2 --two_phase
 
-# Reverse the objective
+# Reverse the objective (to generate counterfactuals)
 python -m vida_geo.cli --image path/to/img.jpg --domain boring --goal worsen
 ```
 
@@ -170,12 +147,6 @@ python -m vida_geo.cli --image path/to/img.jpg --domain boring --goal worsen
 | `--domain`            | Target domain (see table above)                        | (required) |
 | `--goal`              | `improve` or `worsen`                                  | `improve` |
 | `--max_epochs`        | >1 enables the multi-epoch loop                        | `1` |
-| `--two_phase`         | Re-edit each successful region as a fresh input        | off |
-| `--new_regions_only`  | In epochs 2+, only try newly proposed regions          | off |
-| `--min_improvement`   | Stop early if an epoch improves less than this         | `0.0` |
-| `--mask_qc_threshold` | Mask-QC pass threshold                                 | `0.7` |
-| `--edit_qc_threshold` | Edit-QC pass threshold                                 | `0.7` |
-| `--min_delta`         | Minimum score delta for a candidate to count           | `0.1` |
 | `--disable_flux`      | Drop FLUX from the editor set                          | off |
 | `--disable_gemini`    | Drop Gemini from the editor set                        | off |
 | `--output_root`       | Override output directory                              | `outputs/<domain>_runs` |
