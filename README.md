@@ -68,7 +68,7 @@ and "already-optimal" threshold.
 
 
 <p align='center'>
-<img src="assets/pipeline.png" height="400">
+<img src="assets/pipeline.png" height="600">
 </p>
 
 Two model roles, set independently:
@@ -87,12 +87,12 @@ cd VIDA-GEO
 conda create -n vida-geo python=3.10 -y
 conda activate vida-geo
 pip install -r requirements.txt
-export OPENROUTER_API_KEY=sk-or-...           # required
+export OPENROUTER_API_KEY="sk-or-..."           # Openrouter API key required (used for both openai/google models)
 export OPENROUTER_MODEL="openai/gpt-5.1"      # reasoning model (default)
 export GEMINI_EDIT_MODEL="google/gemini-2.5-flash-image"   # editor model (default)
 ```
 
-Verify the install before running anything (no servers needed):
+[OPTIONAL] Verify the install before running anything (no servers needed):
 
 ```shell
 python check_structure.py    # registry + all prompt templates resolve
