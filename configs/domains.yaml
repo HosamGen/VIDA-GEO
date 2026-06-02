@@ -1,0 +1,108 @@
+# VIDA-GEO domain registry
+# ---------------------------------------------------------------------------
+# Single source of truth for every --domain value the agent accepts.
+#
+#   modality   : which image type this domain operates on (drives tool routing)
+#   scorer     : black-box service name; must match a key in services.yaml
+#   score_key  : field to read from the scorer's JSON response
+#   objective  : "maximize" -> a higher score is better
+#                "minimize" -> a lower score is better
+#                (this replaces the old hardcoded boring/depressing special-case)
+#
+# Direction math lives in registry.py; nothing else should special-case a metric.
+# ---------------------------------------------------------------------------
+
+modalities:
+  satellite:
+    text_segmenters: [lisat, sam3]   # try LISAt first, then SAM3 (text), then point fallback
+    fallback_segmenter: sam          # point / auto fallback
+    editors: [flux, gemini]          # both available; enable/disable is a runtime flag
+  gsv:
+    text_segmenters: [sam3]          # SAM3 text, then point fallback
+    fallback_segmenter: sam
+    editors: [flux, gemini]
+
+domains:
+  # ── Satellite (top-down) ────────────────────────────────────────────────
+  road_safety:
+    modality: satellite
+    scorer: risk                # BetaRisk
+    score_key: risk_mean
+    objective: minimize         # "improve" lowers risk
+    already_optimal: 0.1        # risk_mean <= 0.1 (0-1 scale) is already low-risk
+    hints:
+      description: "road-risk level of the scene — conflict points, road geometry, protective features"
+      improve_by: "narrower lanes, marked crossings, wider sidewalks, protected medians, calmer street geometry, separation of pedestrians and traffic"
+      worsen_by: "wider faster corridors, removed pedestrian protections, more turning conflicts, more impervious road surface"
+  greenery:
+    modality: satellite
+    scorer: greenery            # OEM-Lightweight
+    score_key: greenery_score
+    objective: maximize
+    already_optimal: 0.9        # greenery_score >= 0.9 (0-1 scale) is already green
+    hints:
+      description: "vegetation / greenery coverage of the scene — tree canopy, grass, planted areas"
+      improve_by: "adding tree canopy, grass, planted strips, vegetated lots, hedgerows"
+      worsen_by: "replacing vegetation with paving or bare ground, removing canopy or planted areas"
+
+  # ── GSV (street-level) — all five hit the SAME perception server ─────────
+  safety:
+    modality: gsv
+    scorer: perception
+    score_key: safety
+    objective: maximize
+    already_optimal: 9.0
+    hints:
+      description: "perceived safety of the street — well-lit, maintained, visible, orderly"
+      improve_by: "better lighting, cleaner sidewalks, visible signage, maintained buildings, open sightlines, removing clutter or obstructions"
+      worsen_by: "darkness, broken windows, graffiti, overgrown vegetation, abandoned structures, obstructed views"
+  lively:
+    modality: gsv
+    scorer: perception
+    score_key: lively
+    objective: maximize
+    already_optimal: 9.0
+    hints:
+      description: "perceived liveliness and energy of the street — activity, color, movement"
+      improve_by: "outdoor seating, colorful storefronts, street art, greenery, market stalls, pedestrian areas"
+      worsen_by: "empty storefronts, blank walls, deserted sidewalks, monotonous facades, removing colorful elements"
+  beautiful:
+    modality: gsv
+    scorer: perception
+    score_key: beautiful
+    objective: maximize
+    already_optimal: 9.0
+    hints:
+      description: "perceived beauty and aesthetic quality of the streetscape"
+      improve_by: "ornate architecture, flower boxes, tree-lined streets, well-maintained facades, removing eyesores"
+      worsen_by: "ugly infrastructure, exposed utilities, cracked surfaces, monotone concrete, visual clutter"
+  wealthy:
+    modality: gsv
+    scorer: perception
+    score_key: wealthy
+    objective: maximize
+    already_optimal: 9.0
+    hints:
+      description: "perceived wealth and affluence of the neighborhood"
+      improve_by: "luxury storefronts, well-maintained buildings, upscale landscaping, clean streets, quality materials, removing signs of neglect"
+      worsen_by: "dilapidated buildings, broken infrastructure, litter, cheap materials, removing upscale elements"
+  boring:
+    modality: gsv
+    scorer: perception
+    score_key: boring
+    objective: minimize         # "improve" lowers boring
+    already_optimal: 1.0
+    hints:
+      description: "perceived boringness — monotony, lack of visual interest"
+      improve_by: "varied facades, colorful elements, street furniture, mixed-use buildings, removing monotonous features"
+      worsen_by: "uniform walls, repetitive structures, blank surfaces, parking lots, removing interesting elements"
+  depressing:
+    modality: gsv
+    scorer: perception
+    score_key: depressing
+    objective: minimize         # "improve" lowers depressing
+    already_optimal: 1.0
+    hints:
+      description: "perceived depressingness — gloom, decay, hopelessness"
+      improve_by: "brighten facades, add greenery, repair structures, warm colors, open views, removing decayed or gloomy elements"
+      worsen_by: "grey concrete, boarded windows, litter, dark overpasses, removing cheerful or bright elements"

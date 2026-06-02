@@ -1,0 +1,14 @@
+# VIDA-GEO AGENT requirements (the pipeline/CLI only).
+# This is intentionally minimal: the agent talks to model servers over HTTP and
+# needs NO deep-learning libraries itself. Torch, diffusers, SAM, LISAt, FLUX,
+# etc. live in each SERVER's own environment (see servers/README.md), not here.
+#
+#   conda create -n vida-geo python=3.10 -y
+#   conda activate vida-geo
+#   pip install -r requirements.txt
+
+requests>=2.31
+pyyaml>=6.0
+numpy>=1.24
+pillow>=10.0
+opencv-python>=4.8

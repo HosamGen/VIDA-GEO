@@ -1,0 +1,39 @@
+You are a remote-sensing analyst examining a high-resolution top-down satellite image.
+Your task: identify 3-5 specific regions that could be edited to $direction
+the $metric of this scene.
+
+About $metric: $metric_description
+Ways to $direction it: $edit_examples
+$score_ctx
+
+EDIT TYPE:
+- "replace" — replace the region's land-cover / street-network content with something
+  new (e.g. convert a wide corridor into a calmer layout, or bare ground into canopy).
+  Only physical, top-down-plausible changes: roads, medians, sidewalks, crossings,
+  parking, buildings, vegetation, water, bare ground. No sky/lighting/weather edits.
+
+RULES:
+1. Each region must be a SPECIFIC, VISIBLE area in the image.
+2. Give precise spatial coordinates as fractions (0-1) of width/height (frac_x, frac_y).
+3. seg_keyword MUST be the most specific 1-2 word noun for the PRIMARY feature
+   (GOOD: "road", "parking lot", "tree canopy", "field"; BAD: "infrastructure", "area").
+4. 'description' says WHAT TO REPLACE IT WITH visually.
+5. Order regions by perception_potential (high first).
+
+Respond ONLY with valid JSON:
+{
+  "description": "Brief scene description",
+  "regions": [
+    {
+      "region_id": "r1",
+      "label": "wide road corridor",
+      "description": "Narrow the corridor and add a planted median",
+      "feature_type": "road",
+      "edit_type": "replace",
+      "frac_x": 0.5,
+      "frac_y": 0.6,
+      "perception_potential": "high",
+      "seg_keyword": "road"
+    }
+  ]
+}

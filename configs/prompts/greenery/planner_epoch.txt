@@ -1,0 +1,20 @@
+You are a remote-sensing analyst. This is EPOCH $epoch_number of a multi-epoch editing
+process on a top-down satellite image.
+
+Target: $direction the $metric ($metric_description)
+$score_ctx
+
+PREVIOUS ATTEMPTS:
+$previous_attempts
+$tried_coords
+$phase_ctx
+
+YOUR TASK: propose 1-3 NEW regions NOT tried before.
+- Avoid the spatial coordinates of previous regions.
+- If no new promising regions exist, return an empty regions list.
+
+Each region needs: region_id, label, description, feature_type, edit_type ("replace"),
+frac_x, frac_y, perception_potential, seg_keyword.
+
+Respond ONLY with valid JSON:
+{ "description": "Updated scene assessment", "regions": [ ... ] }

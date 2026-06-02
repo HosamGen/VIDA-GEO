@@ -1,0 +1,209 @@
+# VIDA-GEO: A Multi-Agent Pipeline for Indicator-Guided Geospatial Image Editing 🛰️🏙️
+
+VIDA-GEO is a unified multi-agent system that edits satellite and street-level
+imagery to move a target **black-box indicator score** (e.g. perceived safety,
+greenery, road risk) in a chosen direction. A reasoning agent plans regions, a
+policy agent constrains them to physically plausible edits, a segmentation agent
+produces masks via a tool chain, and two image editors compete to produce the
+edit with the best score change — all validated by quality-control agents.
+
+---
+
+## Contents
+- [Overview](#overview)
+- [Domains](#domains)
+- [Architecture](#architecture)
+- [Environment Setup](#environment-setup)
+- [Model Servers](#model-servers)
+- [Running](#running)
+- [Outputs](#outputs)
+- [Acknowledgements](#acknowledgements)
+
+---
+
+## Overview
+
+Given an input image and a target domain, VIDA-GEO:
+
+1. **Scores** the image with the domain's black-box indicator model (baseline).
+2. **Plans** candidate regions to edit (reasoning VLM).
+3. **Checks policy** — classifies each region as free / constrained / remove-only /
+   skip, and emits constraints the editor must respect.
+4. **Segments** each region through a tool chain (text-referred segmentation →
+   point-prompt fallback → bounding-box clip → best-effort), gated by a
+   mask quality-control agent.
+5. **Generates** edits with two editors competing in parallel (a masked inpainter
+   and a full-image generator), each guided by editor-specific prompts.
+6. **Validates & scores** every candidate: an edit-QC agent checks adherence and
+   constraint compliance, the indicator model re-scores, and the best score
+   change (delta) wins.
+
+Optional **multi-epoch** and **two-phase** orchestration iteratively refine or
+re-edit successful regions.
+
+The agent is **model-agnostic and server-based**: it only sends HTTP requests to
+model servers and never loads a deep-learning model itself.
+
+## Domains
+
+VIDA-GEO covers two modalities and eight domains, defined declaratively in
+`configs/domains.yaml`:
+
+| Modality   | Domain        | Indicator (scorer) | Direction (improve) |
+|------------|---------------|--------------------|---------------------|
+| Satellite  | `road_safety` | road risk          | minimize risk       |
+| Satellite  | `greenery`    | greenery coverage  | maximize greenery   |
+| GSV        | `safety`      | perceived safety   | maximize            |
+| GSV        | `lively`      | perceived liveliness | maximize          |
+| GSV        | `beautiful`   | perceived beauty   | maximize            |
+| GSV        | `wealthy`     | perceived wealth   | maximize            |
+| GSV        | `boring`      | perceived boringness | minimize          |
+| GSV        | `depressing`  | perceived depressingness | minimize      |
+
+`--goal worsen` flips the direction for any domain. The registry is the single
+source of truth for each domain's scorer, score key, direction, prompt group,
+and "already-optimal" threshold.
+
+## Architecture
+
+```
+input image
+   │
+   ▼
+[baseline score] ── black-box indicator server
+   │
+   ▼
+[Planning agent] ──► regions (label, point, seg keyword, edit type)
+   │
+   ▼
+[Policy agent] ──► per-region edit class + constraints  (feasibility gate)
+   │
+   ▼
+[Segmentation agent]  per region, early-return tool chain:
+   satellite: LISAt ─► SAM3 ─► SAM point ─► bbox-clip ─► best-effort
+   gsv:       SAM3  ─► SAM point ─► best-effort
+   (mask QC agent gates each; satellite masks pass through QC-validated smoothing)
+   │
+   ▼
+[Generation agent]  editors compete in parallel:
+   FLUX (masked inpaint: crop ROI ─► fill ─► paste back)   ┐
+   Gemini (full-image edit, mask as guidance)              ┘─► best score delta
+   (edit-QC agent gates; every candidate re-scored by the indicator model)
+   │
+   ▼
+result.json  (best candidate, all candidates, per-stage timings)
+```
+
+Two model roles, set independently:
+- **Reasoning model** (planning, policy, suggestion, QC) — OpenRouter, env
+  `OPENROUTER_MODEL`.
+- **Editor model** (Gemini image edit/removal) — OpenRouter, env `GEMINI_EDIT_MODEL`.
+
+## Environment Setup
+
+The agent environment is intentionally minimal — it talks to model servers over
+HTTP and needs **no** deep-learning libraries.
+
+```shell
+git clone https://github.com/<your-org>/VIDA-GEO.git
+cd VIDA-GEO
+conda create -n vida-geo python=3.10 -y
+conda activate vida-geo
+pip install -r requirements.txt
+export OPENROUTER_API_KEY=sk-or-...           # required
+export OPENROUTER_MODEL="openai/gpt-5.1"      # reasoning model (default)
+export GEMINI_EDIT_MODEL="google/gemini-2.5-flash-image"   # editor model (default)
+```
+
+Verify the install before running anything (no servers needed):
+
+```shell
+python check_structure.py    # registry + all prompt templates resolve
+python check_imports.py      # all modules import; config/scorer/CLI wiring OK
+```
+
+## Model Servers
+
+Each model runs as an independent FastAPI server in **its own conda environment**
+(their dependencies conflict and cannot share one env), optionally on its own GPU.
+The agent only needs the servers a given run uses. See **`servers/README.md`** for
+per-server launch commands, ports, and checkpoints. Ports must match
+`configs/services.yaml`.
+
+| Component            | Role                              | Default port | Upstream |
+|----------------------|-----------------------------------|--------------|----------|
+| Perception scorer    | Place Pulse perception (GSV)      | 8111         | [human-perception-place-pulse](https://github.com/strawmelon11/human-perception-place-pulse) |
+| Risk scorer          | road-risk (satellite)             | 8003         | [BetaRisk](https://github.com/FOURM-LAB/BetaRisk) |
+| Greenery scorer      | greenery coverage (satellite)     | 8006         | [oem-lightweight](https://github.com/cliffbb/oem-lightweight) |
+| LISAt                | text-referred seg (satellite)     | 8001         | [LISAt_code](https://github.com/lisat-bair/LISAt_code) |
+| SAM3                 | text-referred seg (GSV)           | 8005         | [sam3](https://github.com/facebookresearch/sam3) |
+| SAM                  | point-prompt fallback (all)       | 8004         | [segment-anything](https://github.com/facebookresearch/segment-anything) |
+| FLUX Fill            | masked inpainting editor          | 8002         | [FLUX.1-Fill-dev](https://github.com/black-forest-labs/flux) |
+
+Which servers each domain needs:
+- **GSV domains:** perception (8111), SAM3 (8005), SAM (8004), FLUX (8002, unless `--disable_flux`).
+- **Satellite domains:** risk **or** greenery (8003 / 8006), LISAt (8001), SAM (8004), FLUX (8002, unless `--disable_flux`).
+
+## Running
+
+```shell
+# GSV, Gemini-only (no FLUX server needed)
+python -m vida_geo.cli --image path/to/streetview.jpg --domain lively --disable_flux
+
+# GSV, both editors competing (FLUX server up on 8002)
+python -m vida_geo.cli --image path/to/streetview.jpg --domain safety
+
+# Satellite
+python -m vida_geo.cli --image path/to/tile.png --domain road_safety
+python -m vida_geo.cli --image path/to/tile.png --domain greenery
+
+# Multi-epoch and two-phase refinement
+python -m vida_geo.cli --image path/to/img.jpg --domain lively --max_epochs 2 --two_phase
+
+# Reverse the objective
+python -m vida_geo.cli --image path/to/img.jpg --domain boring --goal worsen
+```
+
+| Flag                  | Description                                            | Default |
+|-----------------------|--------------------------------------------------------|---------|
+| `--image`             | Input image path                                       | (required) |
+| `--domain`            | Target domain (see table above)                        | (required) |
+| `--goal`              | `improve` or `worsen`                                  | `improve` |
+| `--max_epochs`        | >1 enables the multi-epoch loop                        | `1` |
+| `--two_phase`         | Re-edit each successful region as a fresh input        | off |
+| `--new_regions_only`  | In epochs 2+, only try newly proposed regions          | off |
+| `--min_improvement`   | Stop early if an epoch improves less than this         | `0.0` |
+| `--mask_qc_threshold` | Mask-QC pass threshold                                 | `0.7` |
+| `--edit_qc_threshold` | Edit-QC pass threshold                                 | `0.7` |
+| `--min_delta`         | Minimum score delta for a candidate to count           | `0.1` |
+| `--disable_flux`      | Drop FLUX from the editor set                          | off |
+| `--disable_gemini`    | Drop Gemini from the editor set                        | off |
+| `--output_root`       | Override output directory                              | `outputs/<domain>_runs` |
+
+## Outputs
+
+Each run writes to `outputs/<domain>_runs/<image>_<timestamp>/`:
+
+```
+result.json        best candidate, all candidates, deltas, per-stage timings
+run.log            human-readable stage-by-stage log (per-segmenter, per-editor)
+events.jsonl       structured event stream
+baseline.json      baseline indicator score
+plan.json          planner regions
+policy.json        per-region policy decisions
+masks/<region>/    candidate masks (named by segmenter: lisat_*, sam3_*, sam_point_*, bbox_clip)
+edits/<region>/    candidate edited images (per editor)
+qc/<region>/       mask-QC and edit-QC results (cleaned JSON)
+prompts/           suggestion prompts per region/editor
+```
+
+## Acknowledgements
+
+VIDA-GEO builds on these open-source models and tools, each run as a server:
+
++ [human-perception-place-pulse](https://github.com/strawmelon11/human-perception-place-pulse) — perception scoring for street-level imagery.
++ [BetaRisk](https://github.com/FOURM-LAB/BetaRisk) — probabilistic road-risk scoring for satellite imagery.
++ [oem-lightweight](https://github.com/cliffbb/oem-lightweight) — lightweight OpenEarthMap segmentation, used for greenery scoring.
++ [LISAt_code](https://github.com/lisat-bair/LISAt_code) — language-instructed segmentation for satellite imagery.
++ [SAM3](https://github.com/facebookresearch/sam3) and [Segment Anything](https://github.com/facebookresearch/segment-anything) — text-referred and point-prompt segmentation.
++ [FLUX.1 Fill](https://github.com/black-forest-labs/flux) — masked image inpainting editor.

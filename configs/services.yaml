@@ -1,0 +1,18 @@
+# VIDA-GEO service endpoints (deployment config, not experiment parameters).
+# Override any URL with an env var (PERCEPTION_URL, FLUX_URL, ...) or by editing here.
+# Only the services a given domain needs must be running; the launch script
+# starts them with the GPU/port map below.
+
+services:
+  perception: { url: "http://127.0.0.1:8111", timeout_s: 120 }   # Place Pulse ViT (GSV)
+  greenery:   { url: "http://127.0.0.1:8006", timeout_s: 120 }   # OEM-Lightweight (satellite)
+  risk:       { url: "http://127.0.0.1:8003", timeout_s: 120 }   # BetaRisk (satellite)
+  sam3:       { url: "http://127.0.0.1:8005", timeout_s: 120 }   # text-seg (GSV)
+  lisat:      { url: "http://127.0.0.1:8001", timeout_s: 120 }   # text-seg (satellite)
+  sam:        { url: "http://127.0.0.1:8004", timeout_s: 120 }   # point/auto fallback
+  flux:       { url: "http://127.0.0.1:8002", timeout_s: 900 }   # FLUX fill editor (slow)
+
+# Editor defaults (rarely swept; override per run only if needed).
+flux_defaults:
+  guidance: 40.0
+  num_steps: 50

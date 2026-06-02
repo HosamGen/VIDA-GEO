@@ -1,0 +1,36 @@
+# VIDA-GEO outputs (runs, logs, generated images)
+outputs/
+*_runs/
+
+# Model weights / checkpoints (live with their servers, never in this repo)
+*.pth
+*.pth.tar
+*.safetensors
+*.ckpt
+*.pt
+*.bin
+*.npy
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.ipynb_checkpoints/
+
+# Environments
+.venv/
+venv/
+env/
+.env
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Local config overrides (keep the committed configs/ as the reference)
+configs/services.local.yaml
