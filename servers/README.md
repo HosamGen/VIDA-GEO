@@ -35,10 +35,18 @@ commands and checkpoints; ports must match `configs/services.yaml`.
 
 ## Launch commands (edit GPUs/paths to your machine)
 
-### Perception scorer — Place Pulse ViT (GSV) — port 8111
+### Perception scorer — Place Pulse (GSV) — port 8111
+Upstream model: https://github.com/strawmelon11/human-perception-place-pulse
+Weights: auto-downloaded from HuggingFace (`Jiani11/human-perception-place-pulse`)
+on first run — no manual checkpoint needed.
+
+`servers/perception/serve_gsv_api.py` is **self-contained**: it reproduces the
+ViT-B/16 model class inline and pulls weights from HF, so it does NOT need the
+upstream repo cloned. Just install deps and run.
+(`inference_perception.py` is an optional standalone CLI for scoring without the server.)
 ```bash
-conda activate <perception-env>
-cd /path/to/perception_repo
+conda activate <perception-env>     # needs: torch torchvision pillow fastapi huggingface_hub
+cd servers/perception
 CUDA_VISIBLE_DEVICES=4 python -m uvicorn serve_gsv_api:app \
   --host 127.0.0.1 --port 8111 --workers 1
 ```
@@ -105,12 +113,29 @@ CUDA_VISIBLE_DEVICES=1 python -m uvicorn serve_sam_api:app \
 ```
 
 ### FLUX Fill — masked inpainting editor — port 8002
+Upstream model: https://github.com/black-forest-labs/flux  (FLUX.1-Fill-dev)
+Files in `servers/flux/` (`serve_flux_fill_api.py`, `flux_fill_predictor.py`) are the
+wrappers. The predictor has **two backends** (set `FLUX_BACKEND`):
+- `diffusers` (easiest): uses 🤗 `diffusers.FluxFillPipeline` — just
+  `pip install diffusers transformers accelerate`, weights auto-download from HF.
+  No upstream repo clone needed. Optional quantization via `FLUX_QUANT=nf4` for lower VRAM.
+- `flux` (default): uses the official black-forest-labs/flux internals — clone that
+  repo and put it on `PYTHONPATH`.
+
+Weights: `black-forest-labs/FLUX.1-Fill-dev` (gated on HF — accept its license and
+set `HF_TOKEN` so the download works). FLUX is only needed when FLUX editing is
+enabled (skip it entirely if you always run the agent with `--disable_flux`).
 ```bash
-conda activate <flux-env>
-cd /path/to/flux_repo
+conda activate <flux-env>           # diffusers backend: torch diffusers transformers accelerate fastapi
+cd servers/flux
+export HF_TOKEN=hf_...               # for the gated FLUX.1-Fill-dev download
+export FLUX_BACKEND=diffusers        # or 'flux' for the official repo backend
+# optional: export FLUX_QUANT=nf4    # lower VRAM via pre-quantized NF4
 CUDA_VISIBLE_DEVICES=2 python -m uvicorn serve_flux_fill_api:app \
   --host 127.0.0.1 --port 8002 --workers 1
 ```
+Optional warmup to pay the cold start once (the first real edit is otherwise slow):
+`export FLUX_EAGER_LOAD=1 FLUX_WARMUP=1`, or `POST /warmup` after startup.
 
 ## Health checks
 
