@@ -21,7 +21,7 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..domains.registry import DomainSpec, ModalitySpec
 from ..llm.openrouter import LLMConfig
@@ -136,8 +136,33 @@ class SegmentationAgent:
         # bbox-clip repair: localize an over-large mask to a fixed box around the point.
         self.bbox_clip_area = 0.4    # trigger when best mask covers > 40% of the image
         self.bbox_clip_frac = 0.25   # fixed box side = 25% of image dimensions
+        self._textseg_smooth_floor = 0.02   # pre-QC smooth text-seg masks with area > 2%
 
     # -- QC + smoothing --------------------------------------------------
+    def _qc_textseg(self, mask_path: str, area: float, tag: str) -> Tuple[str, "QCResult"]:
+        """QC a text-seg mask, with a pre-QC smoothing repair for satellite.
+
+        LISAt/SAM3 often return a roughly-correct but holey/fragmented mask that
+        fails QC purely on the holes. On satellite, if the raw mask has meaningful
+        area (>2%), we also smooth it, QC both, and return whichever scores higher.
+        The better-of-two keeps a wrong mask from being rubber-stamped: if smoothing
+        doesn't actually improve QC, the raw result stands.
+        """
+        qc_raw = self._run_mask_qc(mask_path)
+        if not (self.smoothing_enabled and area > self._textseg_smooth_floor):
+            return mask_path, qc_raw
+
+        smooth_out = str(self.run_dir / "masks" / self.region_id / f"{tag}_presmooth.png")
+        s_path, s_qc = maybe_smooth(
+            mask_path=mask_path, qc=qc_raw, cfg=self.smooth_cfg,
+            out_path=smooth_out, rescore=self._run_mask_qc,
+            force=True,   # pre-QC repair: smooth even if the raw mask is "bad"
+        )
+        # maybe_smooth returns the smoothed mask only if QC improved, else the raw.
+        if s_path != mask_path:
+            log.info("    [%s] pre-QC smoothing helped: qc %.3f -> %.3f", tag, qc_raw.score, s_qc.score)
+        return s_path, s_qc
+
     def _run_mask_qc(self, mask_path: str) -> QCResult:
         return evaluate_mask(
             image_path=self.image_path,
@@ -209,7 +234,9 @@ class SegmentationAgent:
                     log.info("  [%s] kw='%s' -> rejected by heuristic (area=%.3f, %.1fs)",
                              text_name, kw, area, time.time() - t0)
                     continue
-                qc = self._run_mask_qc(mask_path)
+                qc = self._run_mask_qc(mask_path) if not self.smoothing_enabled else None
+                if qc is None:
+                    mask_path, qc = self._qc_textseg(mask_path, area, tag=f"{text_name}_{i}")
                 _write_json(qc_dir / f"mask_qc_{text_name}_{i}.json",
                             {"segmenter": text_name, "keyword": kw, "mask_path": mask_path, "qc": qc.raw})
                 self.events.append({"event": "seg_text_qc", "segmenter": text_name, "keyword": kw,

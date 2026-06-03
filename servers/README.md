@@ -33,6 +33,10 @@ module) must run where the model's code is importable. Two patterns are used:
 Each section below says which pattern applies. This folder documents launch
 commands and checkpoints; ports must match `configs/services.yaml`.
 
+> Note: any `*_cli.py` / `infer_*.py` / `inference_*.py` file in a server folder is
+> an **optional** standalone command-line tool for testing that model on a single
+> image. The servers do not import them — you can delete them if you want a leaner repo.
+
 ## Launch commands (edit GPUs/paths to your machine)
 
 ### Perception scorer — Place Pulse (GSV) — port 8111
@@ -88,26 +92,54 @@ CUDA_VISIBLE_DEVICES=1 python -m uvicorn serve_greenery_api:app \
 ```
 
 ### LISAt — text-referred segmentation (satellite) — port 8001
+Upstream: https://github.com/lisat-bair/LISAt_code
+Files in `servers/lisat/` (`serve_lisat_api.py`, `lisat_predictor.py`, `infer_lisat.py`)
+are the wrappers — copy them into your LISAt_code clone so its `model/`, `dataloaders/`,
+and `utils` modules are importable. (`infer_lisat.py` is an optional standalone CLI.)
+
+Model: set `LISAT_MODEL_PATH` to the LISAt-7b checkpoint dir (local path, or the HF
+id `jquenum/LISAt-7b`).
 ```bash
 conda activate <lisat-env>
-cd /path/to/LISAt
+cd /path/to/LISAt_code               # has model/, dataloaders/, utils
+export LISAT_MODEL_PATH=checkpoints/LISAt-7b    # or jquenum/LISAt-7b
 CUDA_VISIBLE_DEVICES=1 python -m uvicorn serve_lisat_api:app \
   --host 127.0.0.1 --port 8001 --workers 1
 ```
 
 ### SAM3 — text-referred segmentation (GSV) — port 8005
+Upstream: https://github.com/facebookresearch/sam3
+Files in `servers/sam3/` (`serve_sam3_api.py`, `sam3_predictor.py`,
+`sam3_text_segment_cli.py`) are the wrappers — copy them where the `sam3` package
+is importable (install SAM3 per its repo). Weights download from HuggingFace on
+first build (the SAM3 model is gated — accept its license and set `HF_TOKEN`).
+
+Note: launch on **8005** to match `services.yaml` (the file's docstring example
+shows 8004, which is SAM's port — use 8005 here).
 ```bash
 conda activate <sam3-env>
-cd /path/to/sam3
-# requires access to facebook/sam3 weights (gated) or an ungated mirror; set HF_TOKEN
+cd /path/to/sam3                     # where the sam3 package is importable
+export HF_TOKEN=hf_...               # for gated SAM3 weights
 CUDA_VISIBLE_DEVICES=1 python -m uvicorn serve_sam3_api:app \
   --host 127.0.0.1 --port 8005 --workers 1
 ```
 
 ### SAM — point-prompt fallback (all domains) — port 8004
+Upstream: https://github.com/facebookresearch/segment-anything
+Files in `servers/sam/` (`serve_sam_api.py`, `sam_predictor.py`, `sam_segment.py`)
+are standalone — they only need the `segment_anything` package importable, NOT the
+repo cloned. Either:
+- `pip install git+https://github.com/facebookresearch/segment-anything.git`, or
+- clone the repo and `pip install -e .`
+
+Checkpoint: **ungated, no HF token needed.** The server auto-downloads the public
+checkpoint on first start if it's missing (set `SAM_MODEL_TYPE` to pick vit_h/l/b;
+default vit_h). To use an existing file instead, point `SAM_CHECKPOINT` at it.
 ```bash
-conda activate <sam-env>
-cd /path/to/sam
+conda activate <sam-env>            # needs: segment-anything torch torchvision opencv-python fastapi
+cd servers/sam
+export SAM_MODEL_TYPE=vit_h          # vit_h | vit_l | vit_b
+export SAM_CHECKPOINT=checkpoints/sam_vit_h_4b8939.pth   # auto-downloaded here if absent
 CUDA_VISIBLE_DEVICES=1 python -m uvicorn serve_sam_api:app \
   --host 127.0.0.1 --port 8004 --workers 1
 ```

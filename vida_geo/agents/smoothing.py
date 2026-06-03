@@ -59,6 +59,7 @@ def maybe_smooth(
     cfg: SmoothConfig,
     out_path: str,
     rescore: Callable[[str], QCResult],
+    force: bool = False,
 ) -> Tuple[str, QCResult]:
     """Conditionally smooth a mask and keep it only if QC improves.
 
@@ -69,11 +70,15 @@ def maybe_smooth(
         out_path:  where to write the smoothed mask if produced.
         rescore:   callable that re-runs mask-QC on a mask path -> QCResult
                    (injected by the segmentation agent to avoid a circular import).
+        force:     if True, smooth even when the normal gate would skip (used by
+                   the pre-QC text-seg repair, where a holey mask is "bad" *because*
+                   of holes smoothing can fix). The keep-only-if-improved rule below
+                   still protects against making a wrong mask worse.
 
     Returns (mask_path, qc) unchanged if smoothing is skipped or doesn't help,
     otherwise (smoothed_path, smoothed_qc).
     """
-    if not _should_smooth(qc, cfg):
+    if not force and not _should_smooth(qc, cfg):
         return mask_path, qc
 
     log.info("Smoothing mask (coverage=%.2f, frag=%.2f)",
