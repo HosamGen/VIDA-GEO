@@ -41,9 +41,6 @@ Given an input image and a target domain, VIDA-GEO:
 Optional **multi-epoch** and **two-phase** orchestration iteratively refine or
 re-edit successful regions.
 
-The agent is **model-agnostic and server-based**: it only sends HTTP requests to
-model servers and never loads a deep-learning model itself.
-
 ## Domains
 
 VIDA-GEO covers two modalities and eight domains, defined declaratively in
@@ -103,6 +100,7 @@ python check_imports.py      # all modules import; config/scorer/CLI wiring OK
 
 Each model runs as an independent FastAPI server in **its own conda environment**
 (their dependencies conflict and cannot share one env), optionally on its own GPU.
+
 The agent only needs the servers a given run uses. See [**`servers/README.md`**](https://github.com/HosamGen/VIDA-GEO/blob/main/servers/) for
 per-server launch commands, ports, and checkpoints. Ports must match
 `configs/services.yaml`.
