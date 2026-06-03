@@ -41,45 +41,39 @@ commands and checkpoints; ports must match `configs/services.yaml`.
 
 ### Perception scorer — Place Pulse (GSV) — port 8111
 Upstream model: https://github.com/strawmelon11/human-perception-place-pulse
-Weights: auto-downloaded from HuggingFace (`Jiani11/human-perception-place-pulse`)
-on first run — no manual checkpoint needed.
 
-`servers/perception/serve_gsv_api.py` is **self-contained**: it reproduces the
-ViT-B/16 model class inline and pulls weights from HF, so it does NOT need the
-upstream repo cloned. Just install deps and run.
+Weights: auto-downloaded from HuggingFace (`Jiani11/human-perception-place-pulse`) on first run — no manual checkpoint needed.
+
+`servers/perception/serve_gsv_api.py` is **self-contained**, just install deps and run.
+
 (`inference_perception.py` is an optional standalone CLI for scoring without the server.)
 ```bash
 conda activate <perception-env>     # needs: torch torchvision pillow fastapi huggingface_hub
 cd servers/perception
-CUDA_VISIBLE_DEVICES=4 python -m uvicorn serve_gsv_api:app \
+CUDA_VISIBLE_DEVICES=X python -m uvicorn serve_gsv_api:app \
   --host 127.0.0.1 --port 8111 --workers 1
 ```
 
 ### Risk scorer — BetaRisk (satellite) — port 8003
-Use the fork (it contains the single-scale `utils/mymodels.py`, the training/inference
-scripts, and the server wrappers — no file-copying needed):
-**https://github.com/HosamGen/BetaRisk**  (forked from https://github.com/FOURM-LAB/BetaRisk)
+Use this fork (no file-copying needed): **https://github.com/HosamGen/BetaRisk**  (forked from https://github.com/FOURM-LAB/BetaRisk)
 
 Checkpoint: this project uses a single-scale retrain (`epoch_15`).
-Download: <ADD CHECKPOINT LINK HERE>
+Download: [checkpoint](https://mbzuaiac-my.sharepoint.com/:u:/g/personal/hosam_elgendy_mbzuai_ac_ae/IQCPZMkvD6qPTr6RXlyYVgOZAdhDhsaDa6MUdbjuPwYAgq4?e=hhKKn7)
 ```bash
 git clone https://github.com/HosamGen/BetaRisk.git
 cd BetaRisk
 conda activate <risk-env>                          # see the fork's README for env setup
 export RISK_CHECKPOINT=/abs/path/to/epoch_15.pth   # REQUIRED (no default)
-CUDA_VISIBLE_DEVICES=1 python -m uvicorn serve_risk_api:app \
+CUDA_VISIBLE_DEVICES=X python -m uvicorn serve_risk_api:app \
   --host 127.0.0.1 --port 8003 --workers 1
 ```
 
 ### Greenery scorer — OEM-Lightweight (satellite) — port 8006
-Upstream: https://github.com/cliffbb/oem-lightweight  (repo name is case-insensitive
-when you clone — name the local folder whatever you like)
+Upstream: https://github.com/cliffbb/oem-lightweight
 Files in `servers/greenery/` (`serve_greenery_api.py`, `greenery_score.py`) are the
 wrappers added on top of oem-lightweight — copy them into your clone so its
 `sparsemask_api` / `fasterseg_api` modules are importable.
 
-No separate checkpoint to host: it uses the default SparseMask files that ship
-with the oem-lightweight repo (`models/SparseMask/...`).
 ```bash
 conda activate <greenery-env>
 cd /path/to/oem-lightweight
@@ -87,7 +81,7 @@ export OEM_REPO=$(pwd)
 export OEM_MODEL=sparsemask
 export OEM_ARCH=models/SparseMask/mask_thres_0.001.npy
 export OEM_WEIGHTS=models/SparseMask/checkpoint_63750.pth.tar
-CUDA_VISIBLE_DEVICES=1 python -m uvicorn serve_greenery_api:app \
+CUDA_VISIBLE_DEVICES=X python -m uvicorn serve_greenery_api:app \
   --host 127.0.0.1 --port 8006 --workers 1
 ```
 
@@ -95,7 +89,9 @@ CUDA_VISIBLE_DEVICES=1 python -m uvicorn serve_greenery_api:app \
 Upstream: https://github.com/lisat-bair/LISAt_code
 Files in `servers/lisat/` (`serve_lisat_api.py`, `lisat_predictor.py`, `infer_lisat.py`)
 are the wrappers — copy them into your LISAt_code clone so its `model/`, `dataloaders/`,
-and `utils` modules are importable. (`infer_lisat.py` is an optional standalone CLI.)
+and `utils` modules are importable. 
+
+(`infer_lisat.py` is an optional standalone CLI.)
 
 Model: set `LISAT_MODEL_PATH` to the LISAt-7b checkpoint dir (local path, or the HF
 id `jquenum/LISAt-7b`).
@@ -103,7 +99,7 @@ id `jquenum/LISAt-7b`).
 conda activate <lisat-env>
 cd /path/to/LISAt_code               # has model/, dataloaders/, utils
 export LISAT_MODEL_PATH=checkpoints/LISAt-7b    # or jquenum/LISAt-7b
-CUDA_VISIBLE_DEVICES=1 python -m uvicorn serve_lisat_api:app \
+CUDA_VISIBLE_DEVICES=X python -m uvicorn serve_lisat_api:app \
   --host 127.0.0.1 --port 8001 --workers 1
 ```
 
@@ -111,16 +107,15 @@ CUDA_VISIBLE_DEVICES=1 python -m uvicorn serve_lisat_api:app \
 Upstream: https://github.com/facebookresearch/sam3
 Files in `servers/sam3/` (`serve_sam3_api.py`, `sam3_predictor.py`,
 `sam3_text_segment_cli.py`) are the wrappers — copy them where the `sam3` package
-is importable (install SAM3 per its repo). Weights download from HuggingFace on
+is importable (install SAM3 per its repo). 
+Weights download from HuggingFace on
 first build (the SAM3 model is gated — accept its license and set `HF_TOKEN`).
 
-Note: launch on **8005** to match `services.yaml` (the file's docstring example
-shows 8004, which is SAM's port — use 8005 here).
 ```bash
 conda activate <sam3-env>
 cd /path/to/sam3                     # where the sam3 package is importable
 export HF_TOKEN=hf_...               # for gated SAM3 weights
-CUDA_VISIBLE_DEVICES=1 python -m uvicorn serve_sam3_api:app \
+CUDA_VISIBLE_DEVICES=X python -m uvicorn serve_sam3_api:app \
   --host 127.0.0.1 --port 8005 --workers 1
 ```
 
@@ -128,19 +123,21 @@ CUDA_VISIBLE_DEVICES=1 python -m uvicorn serve_sam3_api:app \
 Upstream: https://github.com/facebookresearch/segment-anything
 Files in `servers/sam/` (`serve_sam_api.py`, `sam_predictor.py`, `sam_segment.py`)
 are standalone — they only need the `segment_anything` package importable, NOT the
-repo cloned. Either:
+repo cloned. 
+
+Either:
 - `pip install git+https://github.com/facebookresearch/segment-anything.git`, or
 - clone the repo and `pip install -e .`
 
-Checkpoint: **ungated, no HF token needed.** The server auto-downloads the public
-checkpoint on first start if it's missing (set `SAM_MODEL_TYPE` to pick vit_h/l/b;
-default vit_h). To use an existing file instead, point `SAM_CHECKPOINT` at it.
+Checkpoint: The server auto-downloads the public checkpoint on first start if it's missing 
+(set `SAM_MODEL_TYPE` to pick vit_h/l/b; default vit_h). 
+
 ```bash
 conda activate <sam-env>            # needs: segment-anything torch torchvision opencv-python fastapi
 cd servers/sam
 export SAM_MODEL_TYPE=vit_h          # vit_h | vit_l | vit_b
 export SAM_CHECKPOINT=checkpoints/sam_vit_h_4b8939.pth   # auto-downloaded here if absent
-CUDA_VISIBLE_DEVICES=1 python -m uvicorn serve_sam_api:app \
+CUDA_VISIBLE_DEVICES=X python -m uvicorn serve_sam_api:app \
   --host 127.0.0.1 --port 8004 --workers 1
 ```
 
@@ -148,24 +145,28 @@ CUDA_VISIBLE_DEVICES=1 python -m uvicorn serve_sam_api:app \
 Upstream model: https://github.com/black-forest-labs/flux  (FLUX.1-Fill-dev)
 Files in `servers/flux/` (`serve_flux_fill_api.py`, `flux_fill_predictor.py`) are the
 wrappers. The predictor has **two backends** (set `FLUX_BACKEND`):
-- `diffusers` (easiest): uses 🤗 `diffusers.FluxFillPipeline` — just
+- `diffusers` (easiest): uses HF `diffusers.FluxFillPipeline` — just
   `pip install diffusers transformers accelerate`, weights auto-download from HF.
-  No upstream repo clone needed. Optional quantization via `FLUX_QUANT=nf4` for lower VRAM.
+  No upstream repo clone needed.
 - `flux` (default): uses the official black-forest-labs/flux internals — clone that
   repo and put it on `PYTHONPATH`.
 
 Weights: `black-forest-labs/FLUX.1-Fill-dev` (gated on HF — accept its license and
-set `HF_TOKEN` so the download works). FLUX is only needed when FLUX editing is
-enabled (skip it entirely if you always run the agent with `--disable_flux`).
+set `HF_TOKEN` so the download works). 
+FLUX is only needed when FLUX editing is enabled (skip it entirely if you always run the agent with `--disable_flux`).
+
+Recommended to run this on a different GPU than the other tools.
+
 ```bash
 conda activate <flux-env>           # diffusers backend: torch diffusers transformers accelerate fastapi
 cd servers/flux
 export HF_TOKEN=hf_...               # for the gated FLUX.1-Fill-dev download
 export FLUX_BACKEND=diffusers        # or 'flux' for the official repo backend
 # optional: export FLUX_QUANT=nf4    # lower VRAM via pre-quantized NF4
-CUDA_VISIBLE_DEVICES=2 python -m uvicorn serve_flux_fill_api:app \
+CUDA_VISIBLE_DEVICES=Y python -m uvicorn serve_flux_fill_api:app \
   --host 127.0.0.1 --port 8002 --workers 1
 ```
+
 Optional warmup to pay the cold start once (the first real edit is otherwise slow):
 `export FLUX_EAGER_LOAD=1 FLUX_WARMUP=1`, or `POST /warmup` after startup.
 
