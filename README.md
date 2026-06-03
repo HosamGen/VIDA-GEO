@@ -87,7 +87,7 @@ cd VIDA-GEO
 conda create -n vida-geo python=3.10 -y
 conda activate vida-geo
 pip install -r requirements.txt
-export OPENROUTER_API_KEY="sk-or-..."           # Openrouter API key required (used for both openai/google models)
+export OPENROUTER_API_KEY="sk-or-..."           # Openrouter API key required
 export OPENROUTER_MODEL="openai/gpt-5.1"      # reasoning model (default)
 export GEMINI_EDIT_MODEL="google/gemini-2.5-flash-image"   # editor model (default)
 ```
