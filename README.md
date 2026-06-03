@@ -103,7 +103,7 @@ python check_imports.py      # all modules import; config/scorer/CLI wiring OK
 
 Each model runs as an independent FastAPI server in **its own conda environment**
 (their dependencies conflict and cannot share one env), optionally on its own GPU.
-The agent only needs the servers a given run uses. See **`servers/README.md`** for
+The agent only needs the servers a given run uses. See [**`servers/README.md`**](https://github.com/HosamGen/VIDA-GEO/blob/main/servers/) for
 per-server launch commands, ports, and checkpoints. Ports must match
 `configs/services.yaml`.
 
