@@ -43,9 +43,19 @@ class PhaseRunner:
         self.log = setup_logger(self.run_root)
 
     def _collect_phase1_edits(self) -> List[dict]:
+        # Phase-1 may have run single-pass (-> all_candidates, gated on
+        # is_improvement) or multi-epoch (-> all_successful_edits, where mere
+        # membership is the success signal and is_improvement is not meaningful).
+        # Prefer all_candidates; fall back to all_successful_edits when empty.
+        candidates = self.phase1_result.get("all_candidates") or []
+        gate_on_improvement = True
+        if not candidates:
+            candidates = self.phase1_result.get("all_successful_edits") or []
+            gate_on_improvement = False   # these are already the accepted edits
+
         best_by_region: Dict[str, dict] = {}
-        for c in self.phase1_result.get("all_candidates", []):
-            if not c.get("is_improvement"):
+        for c in candidates:
+            if gate_on_improvement and not c.get("is_improvement"):
                 continue
             out = c.get("out_image", "")
             if not out or not Path(out).is_file():
@@ -58,7 +68,7 @@ class PhaseRunner:
         return [{"region_id": rid, "out_image": c["out_image"],
                  "edit_type": c.get("edit_type", "replace"), "prompt": c.get("edit_prompt", ""),
                  "label": labels.get(rid, rid), "delta": c.get("delta", 0),
-                 "new_score": c.get("new_score")} for rid, c in best_by_region.items()]
+                 "new_score": c.get("new_score", c.get("score"))} for rid, c in best_by_region.items()]
 
     def _phase_context(self, edit: dict) -> dict:
         removed, prev = [], []

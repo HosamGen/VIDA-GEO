@@ -1,6 +1,8 @@
 # VIDA-GEO outputs (runs, logs, generated images)
 outputs/
 *_runs/
+test_set/
+baselines/
 
 # Model weights / checkpoints (live with their servers, never in this repo)
 *.pth
