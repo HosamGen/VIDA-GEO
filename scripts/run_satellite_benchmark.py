@@ -25,7 +25,7 @@ from urllib.request import urlopen
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_BENCHMARK_ROOT = Path("/l/users/hosam.elgendy/benchmark_images")
+DEFAULT_BENCHMARK_ROOT = REPO_ROOT / "benchmark_images"
 METRICS = ("greenery", "road_risk")
 DOMAIN_BY_METRIC = {"greenery": "greenery", "road_risk": "road_safety"}
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}

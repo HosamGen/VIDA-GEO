@@ -107,7 +107,7 @@ The agent environment is intentionally minimal — it talks to model servers ove
 HTTP and needs **no** deep-learning libraries.
 
 ```shell
-git clone https://github.com/HosamGen/VIDA-GEO.git
+git clone <repository-url> VIDA-GEO
 cd VIDA-GEO
 conda create -n vida-geo python=3.10 -y
 conda activate vida-geo
@@ -129,7 +129,8 @@ python check_imports.py      # all modules import; config/scorer/CLI wiring OK
 Each model runs as an independent FastAPI server in **its own conda environment**
 (their dependencies conflict and cannot share one env), optionally on its own GPU.
 
-The agent only needs the servers a given run uses. See [**`servers/README.md`**](https://github.com/HosamGen/VIDA-GEO/blob/main/servers/) for
+The agent only needs the servers a given run uses. See
+[**`servers/README.md`**](servers/README.md) for
 per-server launch commands, ports, and checkpoints. Ports must match
 `configs/services.yaml`.
 
@@ -146,6 +147,16 @@ per-server launch commands, ports, and checkpoints. Ports must match
 Which servers each domain needs:
 - **GSV domains:** perception (8111), SAM3 (8005), SAM (8004), FLUX (8002, unless `--disable_flux`).
 - **Satellite domains:** risk **or** greenery (8003 / 8006), LISAt (8001), SAM (8004), SAM3 (8005), FLUX (8002, unless `--disable_flux`).
+
+## Benchmark Data
+
+The benchmark images are not distributed in this repository. Place an
+authorized local copy under `benchmark_images/<metric>/`. The data-free
+[benchmark manifest](benchmark_images/benchmark_manifest.csv) records the
+expected split, relative filename, coordinates, image dimensions, and GSV
+camera heading for all 800 inputs. See
+[benchmark_images/README.md](benchmark_images/README.md) for the layout and
+field definitions.
 
 ## Running
 

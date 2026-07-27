@@ -55,14 +55,17 @@ CUDA_VISIBLE_DEVICES=X python -m uvicorn serve_gsv_api:app \
 ```
 
 ### Risk scorer — BetaRisk (satellite) — port 8003
-Use this fork (no file-copying needed): **https://github.com/HosamGen/BetaRisk**  (forked from https://github.com/FOURM-LAB/BetaRisk)
+Upstream: **https://github.com/FOURM-LAB/BetaRisk**
 
-Checkpoint: this project uses a single-scale retrain (`epoch_15`).
-Download: [checkpoint](https://mbzuaiac-my.sharepoint.com/:u:/g/personal/hosam_elgendy_mbzuai_ac_ae/IQCPZMkvD6qPTr6RXlyYVgOZAdhDhsaDa6MUdbjuPwYAgq4?e=hhKKn7)
+This project uses a single-scale retrained `epoch_15` checkpoint. The checkpoint
+is not distributed in this repository. Set `RISK_CHECKPOINT` to a compatible
+local checkpoint and `BETARISK_REPO` to a BetaRisk checkout containing the
+`serve_risk_api.py` adapter expected by VIDA-GEO.
 ```bash
-git clone https://github.com/HosamGen/BetaRisk.git
+git clone https://github.com/FOURM-LAB/BetaRisk.git
 cd BetaRisk
 conda activate <risk-env>                          # see the fork's README for env setup
+export BETARISK_REPO=/abs/path/to/BetaRisk         # checkout with serve_risk_api.py
 export RISK_CHECKPOINT=/abs/path/to/epoch_15.pth   # REQUIRED (no default)
 CUDA_VISIBLE_DEVICES=X python -m uvicorn serve_risk_api:app \
   --host 127.0.0.1 --port 8003 --workers 1

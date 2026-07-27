@@ -31,7 +31,7 @@ from urllib.request import urlopen
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_BENCHMARK_ROOT = Path("/l/users/hosam.elgendy/benchmark_images")
+DEFAULT_BENCHMARK_ROOT = REPO_ROOT / "benchmark_images"
 DEFAULT_METRICS = (
     "safety", "lively", "beautiful", "wealthy", "boring", "depressing",
 )

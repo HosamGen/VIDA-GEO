@@ -5,6 +5,8 @@ test_set/
 baselines/
 slurm_logs/
 slurm/
+/run_gsv_benchmark.sh
+/run_satellite_benchmark.sh
 
 # Local experiment history and agent state
 archive/
