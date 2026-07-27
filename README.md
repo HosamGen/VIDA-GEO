@@ -88,8 +88,9 @@ system prompts remain synchronized with `configs/prompts/`:
 python scripts/build_prompt_reference.py
 ```
 
-For a full Qwen3-VL visual-quality and scene-realism evaluation, use the
-self-contained evaluator in [`llm_judge/qwen3vl_evaluate.py`](llm_judge/qwen3vl_evaluate.py).
+For a full Qwen3-VL realism, policy-preservation, and visual-quality evaluation,
+use the self-contained evaluator in
+[`llm_judge/qwen3vl_evaluate.py`](llm_judge/qwen3vl_evaluate.py).
 Its default provider, backend, and model are OpenRouter, Chat Completions, and
 `qwen/qwen3-vl-32b-instruct`:
 

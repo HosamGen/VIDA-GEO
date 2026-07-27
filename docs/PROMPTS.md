@@ -684,102 +684,53 @@ Scoring: 0.80-1.00 good; 0.50-0.79 ok; 0.00-0.49 bad.
 
 ## LLM-as-judge prompts and protocol
 
-Benchmark judging compares two images in a fixed order: the **original/reference image first**, followed by the **edited/output image**. The three final criteria are intentionally split into two judge requests because policy preservation and output naturalness test different failure modes.
-
-| Request | Scores returned | Role in the tracked evaluator |
-|---|---|---|
-| Policy-preservation judge | `policy_preservation` | Computed separately; `qwen3vl_evaluate.py` reads this existing score from its input |
-| Revised Qwen3-VL judge | `visual_quality`, `scene_realism` | Called once per image pair by the tracked evaluator |
+Benchmark judging compares two images in a fixed order: the **original/reference image first**, followed by the **edited/output image**. Following the paired-image benchmark evaluator, one strict Qwen3-VL request scores all three criteria together: `realism`, `policy_preservation`, and `visual_quality`.
 
 <details>
-<summary>Policy-preservation judge prompt (complete)</summary>
+<summary>Qwen3-VL three-criterion judge prompt (complete)</summary>
 
 ```text
-You are a strict, consistent image-edit evaluator.
-You will be given an original/reference image and a candidate output image.
+You are a STRICT, consistent judge for an image edit. Be critical and
+discerning — most edits have real flaws, and high scores (8-10) must be EARNED, not given by default.
+You receive two images: first the ORIGINAL/reference image, then the EDITED/output image.
+Judge ONLY the edited image, using the original to see exactly what changed.
 
-Score ONLY this criterion on a 1-10 integer scale:
+Score each of the following on an integer 1-10 scale. Use the full range; reserve 9-10 for
+edits that are nearly flawless on that criterion, and do not hesitate to give low scores.
 
-policy_preservation: Whether the candidate preserves the original scene's core
-structure and function. Compare against the reference image. Penalize removal
-or severe distortion of roads, buildings, sidewalks, vehicles, street layout,
-vegetation layout, utility poles/wires, doors/windows, building envelopes, or
-essential infrastructure. Reward edits that keep the original scene recognizable
-and operational while changing only the intended local appearance.
+1) realism — photographic / remote-sensing plausibility of the edited image.
+   Push this score DOWN hard when the edit looks obviously AI-generated in a way that breaks
+   realism: a shifted artistic style (cartoonish, illustrated, painterly, over-smoothed,
+   over-saturated, "rendered" CGI look), implausible lighting or textures, or a global look
+   that no real photo/satellite capture would have. Note: a strong, realistic edit may still
+   have a faintly synthetic feel and that alone is fine — only penalize when the synthetic
+   quality is obvious and harms believability. A clearly cartoon-ish or stylized result is a
+   severe realism failure and should score very low.
 
-Do not score visual quality or scene realism here unless the issue changes or
-damages the original scene's core structure/function.
+2) policy_preservation — how faithfully the edit preserves the original scene's core structure,
+   layout, function, and geography, changing ONLY what the edit intends. Penalize MORE when the
+   edit alters structural/scene content rather than surface appearance: e.g. adding or removing
+   windows, doors, or building floors; moving, widening, adding, or deleting roads, lanes,
+   intersections, or paths; changing building footprints, counts, or placement; or otherwise
+   re-drawing the geography. The more the scene morphs away from the original — so that it reads
+   as a different place rather than the same place edited — the lower this score should go.
+   Small, intended, localized changes that keep the place recognizable score well; large or
+   unintended structural rewrites score poorly.
 
-Return ONLY valid JSON with exactly this key:
-{"policy_preservation": <1-10 integer>}
+3) visual_quality — sharpness, artifact level, compositing quality, and polish. Treat visible
+   ARTIFACTS as a major fault and penalize them heavily: warping, smearing, ghosting, duplicated
+   or melted objects, garbled textures, seams or blending halos around edited regions, nonsense
+   detail, or distorted geometry. Even one obvious artifact should pull this score down a lot;
+   multiple or prominent artifacts mean a very low score.
+
+Judge holistically within each criterion — these are guidelines for what matters, not a fixed
+points table. Return ONLY a JSON object with exactly these integer fields and nothing else:
+{"realism": <1-10>, "policy_preservation": <1-10>, "visual_quality": <1-10>}
 ```
 
 </details>
 
-<details>
-<summary>Qwen3-VL visual-quality and scene-realism judge prompt (complete)</summary>
-
-```text
-You are a strict, consistent image-edit evaluator.
-You receive two images: first the original/reference image, then the edited/output image.
-
-Your task is to produce ONLY two integer scores:
-- visual_quality
-- scene_realism
-
-Score exactly these two revised criteria.
-
-1) visual_quality:
-Score whether the edited/output image looks like a natural, authentic image in
-the same capture modality as the original.
-
-For street-view or ground-level images, it should look like a real GSV/photo
-capture rather than a cartoon, illustration, CGI render, painting, collage, or
-oddly formatted/generated image. Penalize synthetic image style, over-smoothed
-AI texture, strange color processing, low sharpness, seams, warping, ghosting,
-garbled texture, melted objects, obvious compositing artifacts, or any visual
-presentation that makes the image itself feel unnatural.
-
-For satellite or aerial images, it should look like a real remote-sensing image
-with plausible sensor texture, scale, resolution, shadows, land-cover detail,
-and image formatting. Penalize painterly/CGI appearance, fake map-like styling,
-unnatural texture, inconsistent resolution, or obvious generation artifacts.
-
-This criterion is about the image as an image, not whether the edited world is a
-good intervention.
-
-2) scene_realism:
-Score whether the edited world is physically, semantically, and contextually
-plausible in this specific scene.
-
-Objects should have plausible function, material, scale, geometry, attachment,
-and spatial relationships. Doors should plausibly open and close. Windows,
-porches, roads, sidewalks, wires, roofs, trees, parking areas, and buildings
-should fit the surrounding structure and land use. A brick building should not
-become materially incoherent. Roads and infrastructure should connect logically.
-
-Penalize edits that appear to game the target metric by inserting context-
-breaking or excessive features: many porches in a neighborhood where they do not
-fit, a helicopter pad added to make an area look greener, luxury objects pasted
-into a setting where they make no physical or social sense, repeated objects
-that would not actually exist there, or changes that conflict with the local
-neighborhood/building/satellite context.
-
-Do not score strict policy preservation here unless the violation also makes
-the edited world physically or contextually implausible. The old
-policy_preservation score remains separate and is copied from the input file.
-
-Scoring:
-- Use a 1-10 integer scale.
-- 10 means excellent, natural, and plausible.
-- 1 means severe failure.
-- Return valid JSON only, with exactly these keys:
-  {"visual_quality": <int>, "scene_realism": <int>}
-```
-
-</details>
-
-### Revised Qwen3-VL request details
+### Qwen3-VL request details
 
 | Setting | Value |
 |---|---|
@@ -790,7 +741,7 @@ Scoring:
 | Image order | Original/reference, then edited/output |
 | Image preprocessing | Preserve aspect ratio; resize only when the longest side exceeds 1024 px; JPEG quality 92 |
 | Temperature | `0.0` |
-| Maximum output tokens | `300` |
+| Maximum output tokens | `800` |
 | Structured output | Strict JSON Schema |
 | Default retries / workers | 4 retries / 1 worker |
 
@@ -801,47 +752,35 @@ The exact structured-output schema is:
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "visual_quality",
-    "scene_realism"
+    "realism",
+    "policy_preservation",
+    "visual_quality"
   ],
   "properties": {
+    "realism": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
+    "policy_preservation": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10
+    },
     "visual_quality": {
       "type": "integer",
-      "enum": [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10
-      ]
-    },
-    "scene_realism": {
-      "type": "integer",
-      "enum": [
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        8,
-        9,
-        10
-      ]
+      "minimum": 1,
+      "maximum": 10
     }
   }
 }
 ```
 
-The evaluator validates both scores as integers from 1 through 10, records input/output/total token usage and errors, resumes from an existing output CSV, and calculates `llm_judge_avg` as the arithmetic mean of `policy_preservation`, `visual_quality`, and `scene_realism`. It does **not** silently replace or recompute the supplied `policy_preservation` score.
+The evaluator validates all three scores as integers from 1 through 10, records input/output/total token usage and errors, resumes from an existing output CSV, and calculates `llm_judge_avg` as the arithmetic mean of `realism`, `policy_preservation`, and `visual_quality`. Every criterion is recomputed by the same request; no policy score is copied from the input.
 
-Print the exact active revised judge prompt without making an API request:
+This three-score CSV schema is incompatible with the older two-score output. Use a new or empty `--out` path when switching protocols; the evaluator rejects an older header rather than appending misaligned rows.
+
+Print the exact active judge prompt without making an API request:
 
 ```shell
 python llm_judge/qwen3vl_evaluate.py --print_prompt

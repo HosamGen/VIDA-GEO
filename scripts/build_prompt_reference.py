@@ -95,8 +95,7 @@ def judge_spec() -> dict:
     """Load the tracked, self-contained judge specification without invoking main."""
     namespace = runpy.run_path(str(ROOT / "llm_judge" / "qwen3vl_evaluate.py"))
     return {
-        "policy_prompt": namespace["POLICY_PRESERVATION_PROMPT"],
-        "revised_prompt": namespace["JUDGE_PROMPT"],
+        "prompt": namespace["JUDGE_PROMPT"],
         "schema": namespace["schema"](),
     }
 
@@ -234,26 +233,16 @@ def build() -> str:
         "",
         "Benchmark judging compares two images in a fixed order: the "
         "**original/reference image first**, followed by the **edited/output "
-        "image**. The three final criteria are intentionally split into two "
-        "judge requests because policy preservation and output naturalness test "
-        "different failure modes.",
-        "",
-        "| Request | Scores returned | Role in the tracked evaluator |",
-        "|---|---|---|",
-        "| Policy-preservation judge | `policy_preservation` | Computed separately; `qwen3vl_evaluate.py` reads this existing score from its input |",
-        "| Revised Qwen3-VL judge | `visual_quality`, `scene_realism` | Called once per image pair by the tracked evaluator |",
+        "image**. Following the paired-image benchmark evaluator, one strict "
+        "Qwen3-VL request scores all three criteria together: "
+        "`realism`, `policy_preservation`, and `visual_quality`.",
         "",
         markdown_details(
-            "Policy-preservation judge prompt (complete)",
-            fenced(judge["policy_prompt"]),
+            "Qwen3-VL three-criterion judge prompt (complete)",
+            fenced(judge["prompt"]),
         ),
         "",
-        markdown_details(
-            "Qwen3-VL visual-quality and scene-realism judge prompt (complete)",
-            fenced(judge["revised_prompt"]),
-        ),
-        "",
-        "### Revised Qwen3-VL request details",
+        "### Qwen3-VL request details",
         "",
         "| Setting | Value |",
         "|---|---|",
@@ -264,7 +253,7 @@ def build() -> str:
         "| Image order | Original/reference, then edited/output |",
         "| Image preprocessing | Preserve aspect ratio; resize only when the longest side exceeds 1024 px; JPEG quality 92 |",
         "| Temperature | `0.0` |",
-        "| Maximum output tokens | `300` |",
+        "| Maximum output tokens | `800` |",
         "| Structured output | Strict JSON Schema |",
         "| Default retries / workers | 4 retries / 1 worker |",
         "",
@@ -272,14 +261,18 @@ def build() -> str:
         "",
         fenced(json.dumps(judge["schema"], indent=2), "json"),
         "",
-        "The evaluator validates both scores as integers from 1 through 10, "
+        "The evaluator validates all three scores as integers from 1 through 10, "
         "records input/output/total token usage and errors, resumes from an "
         "existing output CSV, and calculates `llm_judge_avg` as the arithmetic "
-        "mean of `policy_preservation`, `visual_quality`, and `scene_realism`. "
-        "It does **not** silently replace or recompute the supplied "
-        "`policy_preservation` score.",
+        "mean of `realism`, `policy_preservation`, and `visual_quality`. Every "
+        "criterion is recomputed by the same request; no policy score is copied "
+        "from the input.",
         "",
-        "Print the exact active revised judge prompt without making an API request:",
+        "This three-score CSV schema is incompatible with the older two-score "
+        "output. Use a new or empty `--out` path when switching protocols; the "
+        "evaluator rejects an older header rather than appending misaligned rows.",
+        "",
+        "Print the exact active judge prompt without making an API request:",
         "",
         fenced("python llm_judge/qwen3vl_evaluate.py --print_prompt", "shell"),
         "",

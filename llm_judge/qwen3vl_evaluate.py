@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
 """
-Self-contained Qwen3-VL evaluator for revised visual quality and scene realism.
+Self-contained Qwen3-VL evaluator for realism, policy preservation, and visual
+quality.
 
-The evaluator asks the LLM for only the two revised scores:
-  - visual_quality
-  - scene_realism
-
-It carries the old policy-preservation score from the input file into the
-output CSV and computes llm_judge_avg = mean(policy_preservation,
-visual_quality, scene_realism). It does not re-score policy preservation.
+The evaluator follows benchmark_outputs/evaluate_pairs.py: one judge request
+scores all three criteria from the original/edited image pair and computes
+llm_judge_avg from those newly returned scores.
 
 Examples:
   python llm_judge/qwen3vl_evaluate.py --print_prompt
@@ -49,111 +46,60 @@ from xml.etree import ElementTree as ET
 OPENAI_RESPONSES_URL = "https://api.openai.com/v1/responses"
 OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_RESPONSES_URL = "https://openrouter.ai/api/v1/responses"
-SCORE_ENUM = list(range(1, 11))
 RAW_FAILURE_DEBUG_CHARS = 12000
 
-# This prompt documents the separately computed policy-preservation score that
-# this evaluator reads from its input. It is retained here as part of the
-# reproducible judge specification; qwen3vl_evaluate.py does not call it.
-POLICY_PRESERVATION_PROMPT = """You are a strict, consistent image-edit evaluator.
-You will be given an original/reference image and a candidate output image.
+# Copied verbatim from benchmark_outputs/evaluate_pairs.py, which in turn
+# preserves the historical Qwen3-VL benchmark judge prompt.
+JUDGE_PROMPT = """You are a STRICT, consistent judge for an image edit. Be critical and
+discerning — most edits have real flaws, and high scores (8-10) must be EARNED, not given by default.
+You receive two images: first the ORIGINAL/reference image, then the EDITED/output image.
+Judge ONLY the edited image, using the original to see exactly what changed.
 
-Score ONLY this criterion on a 1-10 integer scale:
+Score each of the following on an integer 1-10 scale. Use the full range; reserve 9-10 for
+edits that are nearly flawless on that criterion, and do not hesitate to give low scores.
 
-policy_preservation: Whether the candidate preserves the original scene's core
-structure and function. Compare against the reference image. Penalize removal
-or severe distortion of roads, buildings, sidewalks, vehicles, street layout,
-vegetation layout, utility poles/wires, doors/windows, building envelopes, or
-essential infrastructure. Reward edits that keep the original scene recognizable
-and operational while changing only the intended local appearance.
+1) realism — photographic / remote-sensing plausibility of the edited image.
+   Push this score DOWN hard when the edit looks obviously AI-generated in a way that breaks
+   realism: a shifted artistic style (cartoonish, illustrated, painterly, over-smoothed,
+   over-saturated, "rendered" CGI look), implausible lighting or textures, or a global look
+   that no real photo/satellite capture would have. Note: a strong, realistic edit may still
+   have a faintly synthetic feel and that alone is fine — only penalize when the synthetic
+   quality is obvious and harms believability. A clearly cartoon-ish or stylized result is a
+   severe realism failure and should score very low.
 
-Do not score visual quality or scene realism here unless the issue changes or
-damages the original scene's core structure/function.
+2) policy_preservation — how faithfully the edit preserves the original scene's core structure,
+   layout, function, and geography, changing ONLY what the edit intends. Penalize MORE when the
+   edit alters structural/scene content rather than surface appearance: e.g. adding or removing
+   windows, doors, or building floors; moving, widening, adding, or deleting roads, lanes,
+   intersections, or paths; changing building footprints, counts, or placement; or otherwise
+   re-drawing the geography. The more the scene morphs away from the original — so that it reads
+   as a different place rather than the same place edited — the lower this score should go.
+   Small, intended, localized changes that keep the place recognizable score well; large or
+   unintended structural rewrites score poorly.
 
-Return ONLY valid JSON with exactly this key:
-{"policy_preservation": <1-10 integer>}
-"""
+3) visual_quality — sharpness, artifact level, compositing quality, and polish. Treat visible
+   ARTIFACTS as a major fault and penalize them heavily: warping, smearing, ghosting, duplicated
+   or melted objects, garbled textures, seams or blending halos around edited regions, nonsense
+   detail, or distorted geometry. Even one obvious artifact should pull this score down a lot;
+   multiple or prominent artifacts mean a very low score.
 
-JUDGE_DEFINITION = """Score exactly these two revised criteria.
+Judge holistically within each criterion — these are guidelines for what matters, not a fixed
+points table. Return ONLY a JSON object with exactly these integer fields and nothing else:
+{"realism": <1-10>, "policy_preservation": <1-10>, "visual_quality": <1-10>}"""
 
-1) visual_quality:
-Score whether the edited/output image looks like a natural, authentic image in
-the same capture modality as the original.
-
-For street-view or ground-level images, it should look like a real GSV/photo
-capture rather than a cartoon, illustration, CGI render, painting, collage, or
-oddly formatted/generated image. Penalize synthetic image style, over-smoothed
-AI texture, strange color processing, low sharpness, seams, warping, ghosting,
-garbled texture, melted objects, obvious compositing artifacts, or any visual
-presentation that makes the image itself feel unnatural.
-
-For satellite or aerial images, it should look like a real remote-sensing image
-with plausible sensor texture, scale, resolution, shadows, land-cover detail,
-and image formatting. Penalize painterly/CGI appearance, fake map-like styling,
-unnatural texture, inconsistent resolution, or obvious generation artifacts.
-
-This criterion is about the image as an image, not whether the edited world is a
-good intervention.
-
-2) scene_realism:
-Score whether the edited world is physically, semantically, and contextually
-plausible in this specific scene.
-
-Objects should have plausible function, material, scale, geometry, attachment,
-and spatial relationships. Doors should plausibly open and close. Windows,
-porches, roads, sidewalks, wires, roofs, trees, parking areas, and buildings
-should fit the surrounding structure and land use. A brick building should not
-become materially incoherent. Roads and infrastructure should connect logically.
-
-Penalize edits that appear to game the target metric by inserting context-
-breaking or excessive features: many porches in a neighborhood where they do not
-fit, a helicopter pad added to make an area look greener, luxury objects pasted
-into a setting where they make no physical or social sense, repeated objects
-that would not actually exist there, or changes that conflict with the local
-neighborhood/building/satellite context.
-
-Do not score strict policy preservation here unless the violation also makes
-the edited world physically or contextually implausible. The old
-policy_preservation score remains separate and is copied from the input file.
-"""
-
-JUDGE_PROMPT = f"""You are a strict, consistent image-edit evaluator.
-You receive two images: first the original/reference image, then the edited/output image.
-
-Your task is to produce ONLY two integer scores:
-- visual_quality
-- scene_realism
-
-{JUDGE_DEFINITION.strip()}
-
-Scoring:
-- Use a 1-10 integer scale.
-- 10 means excellent, natural, and plausible.
-- 1 means severe failure.
-- Return valid JSON only, with exactly these keys:
-  {{"visual_quality": <int>, "scene_realism": <int>}}
-"""
+JUDGE_KEYS = ("realism", "policy_preservation", "visual_quality")
 
 INPUT_HEADERS = {"input path", "input_path", "input", "source image", "source_path"}
 OUTPUT_HEADERS = {"output path", "output_path", "output", "edited image", "edited_path"}
 HEADER_ALIASES = {
     "task": ["task", "metric"],
     "method": ["method", "model"],
-    "policy_preservation": [
-        "policy preservation",
-        "policy_preservation",
-        "llm reference preservation",
-        "llm_reference_preservation",
-        "llm policy preservation",
-        "llm_policy_preservation",
-        "old_policy_preservation",
-    ],
 }
 
 OUTPUT_FIELDS = [
     "source_file", "sheet", "row_number", "task", "method",
     "input_path", "output_path",
-    "policy_preservation", "visual_quality", "scene_realism", "llm_judge_avg",
+    "realism", "policy_preservation", "visual_quality", "llm_judge_avg",
     "judge_provider", "judge_model", "judge_backend",
     "input_tokens", "output_tokens", "total_tokens", "error",
 ]
@@ -307,7 +253,6 @@ def iter_xlsx_rows(path: Path, exclude_sheets: set[str]) -> Iterable[dict]:
                     "output_path": outp,
                     "task": row_meta(row, header_map, "task"),
                     "method": row_meta(row, header_map, "method"),
-                    "policy_preservation": row_meta(row, header_map, "policy_preservation"),
                 }
 
 
@@ -329,7 +274,6 @@ def iter_csv_rows(path: Path) -> Iterable[dict]:
                 "output_path": display(row.get(output_header)).strip(),
                 "task": display(row.get(next((norm_to_header[norm_header(a)] for a in HEADER_ALIASES["task"] if norm_header(a) in norm_to_header), ""), "")),
                 "method": display(row.get(next((norm_to_header[norm_header(a)] for a in HEADER_ALIASES["method"] if norm_header(a) in norm_to_header), ""), "")),
-                "policy_preservation": display(row.get(next((norm_to_header[norm_header(a)] for a in HEADER_ALIASES["policy_preservation"] if norm_header(a) in norm_to_header), ""), "")),
             }
 
 
@@ -396,10 +340,10 @@ def schema() -> dict:
     return {
         "type": "object",
         "additionalProperties": False,
-        "required": ["visual_quality", "scene_realism"],
+        "required": list(JUDGE_KEYS),
         "properties": {
-            "visual_quality": {"type": "integer", "enum": SCORE_ENUM},
-            "scene_realism": {"type": "integer", "enum": SCORE_ENUM},
+            key: {"type": "integer", "minimum": 1, "maximum": 10}
+            for key in JUDGE_KEYS
         },
     }
 
@@ -503,9 +447,7 @@ def usage(body: dict) -> tuple[int, int, int]:
 def parse_scores(parsed: Optional[dict]) -> dict:
     if parsed is None:
         raise RuntimeError("empty or unparseable judge response")
-    vq = parsed.get("visual_quality", parsed.get("revised_visual_quality"))
-    sr = parsed.get("scene_realism", parsed.get("revised_scene_realism"))
-    scores = {"visual_quality": int(vq), "scene_realism": int(sr)}
+    scores = {key: int(parsed[key]) for key in JUDGE_KEYS}
     for key, value in scores.items():
         if value < 1 or value > 10:
             raise RuntimeError(f"{key} out of range: {value}")
@@ -556,7 +498,7 @@ def judge(row: dict, args, api_key: str) -> tuple[Optional[dict], tuple[int, int
                 body = post_json(OPENROUTER_CHAT_URL, {
                     "model": args.model,
                     "temperature": args.temperature,
-                    "max_tokens": 300,
+                    "max_tokens": 800,
                     "messages": [{"role": "user", "content": [
                         {"type": "text", "text": JUDGE_PROMPT},
                         {"type": "text", "text": "Original/reference image:"},
@@ -574,6 +516,7 @@ def judge(row: dict, args, api_key: str) -> tuple[Optional[dict], tuple[int, int
             body = post_json(url, {
                 "model": args.model,
                 "temperature": args.temperature,
+                "max_output_tokens": 800,
                 "input": [
                     {"role": "system", "content": JUDGE_PROMPT},
                     {"role": "user", "content": [
@@ -600,19 +543,15 @@ def judge(row: dict, args, api_key: str) -> tuple[Optional[dict], tuple[int, int
 
 
 def output_row(row: dict, args, scores: Optional[dict], token_usage: tuple[int, int, int], error: str) -> dict:
-    policy = row.get("policy_preservation", "")
-    vq = "" if scores is None else scores["visual_quality"]
-    sr = "" if scores is None else scores["scene_realism"]
-    try:
-        avg = (float(policy) + float(vq) + float(sr)) / 3.0
-    except Exception:
-        avg = ""
+    values = {
+        key: "" if scores is None else scores[key]
+        for key in JUDGE_KEYS
+    }
+    avg = "" if scores is None else sum(scores.values()) / len(scores)
     inp, out, total = token_usage
     return {
         **{k: row.get(k, "") for k in ["source_file", "sheet", "row_number", "task", "method", "input_path", "output_path"]},
-        "policy_preservation": policy,
-        "visual_quality": vq,
-        "scene_realism": sr,
+        **values,
         "llm_judge_avg": avg,
         "judge_provider": args.provider,
         "judge_model": args.model,
@@ -627,17 +566,33 @@ def output_row(row: dict, args, scores: Optional[dict], token_usage: tuple[int, 
 def load_done(path: Path) -> set[tuple[str, str, str, str]]:
     if not path.is_file():
         return set()
+    validate_output_schema(path)
     with open(path, newline="") as f:
         return {
             (r.get("source_file", ""), r.get("sheet", ""), r.get("row_number", ""), r.get("output_path", ""))
             for r in csv.DictReader(f)
-            if r.get("visual_quality") and r.get("scene_realism") and not r.get("error")
+            if all(r.get(key) for key in JUDGE_KEYS) and not r.get("error")
         }
+
+
+def validate_output_schema(path: Path) -> None:
+    """Refuse to append three-score rows beneath an older CSV header."""
+    if not path.is_file() or path.stat().st_size == 0:
+        return
+    with open(path, newline="") as f:
+        header = next(csv.reader(f), [])
+    if header != OUTPUT_FIELDS:
+        raise RuntimeError(
+            f"{path} uses an incompatible output schema. The judge now writes "
+            f"{', '.join(JUDGE_KEYS)} in one call; use a new --out path or "
+            "archive the older two-criterion CSV before rerunning."
+        )
 
 
 def append_rows(path: Path, rows: Sequence[dict]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    needs_header = not path.is_file()
+    validate_output_schema(path)
+    needs_header = not path.is_file() or path.stat().st_size == 0
     with open(path, "a", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=OUTPUT_FIELDS)
         if needs_header:
