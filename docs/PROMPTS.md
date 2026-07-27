@@ -776,9 +776,7 @@ The exact structured-output schema is:
 }
 ```
 
-The evaluator validates all three scores as integers from 1 through 10, records input/output/total token usage and errors, resumes from an existing output CSV, and calculates `llm_judge_avg` as the arithmetic mean of `realism`, `policy_preservation`, and `visual_quality`. Every criterion is recomputed by the same request; no policy score is copied from the input.
-
-This three-score CSV schema is incompatible with the older two-score output. Use a new or empty `--out` path when switching protocols; the evaluator rejects an older header rather than appending misaligned rows.
+The evaluator validates all three scores as integers from 1 through 10, records input/output/total token usage and errors, resumes from an existing output CSV, and calculates `llm_judge_avg` as the arithmetic mean of `realism`, `policy_preservation`, and `visual_quality`.
 
 Print the exact active judge prompt without making an API request:
 
