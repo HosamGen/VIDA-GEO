@@ -52,6 +52,28 @@ OPENROUTER_RESPONSES_URL = "https://openrouter.ai/api/v1/responses"
 SCORE_ENUM = list(range(1, 11))
 RAW_FAILURE_DEBUG_CHARS = 12000
 
+# This prompt documents the separately computed policy-preservation score that
+# this evaluator reads from its input. It is retained here as part of the
+# reproducible judge specification; qwen3vl_evaluate.py does not call it.
+POLICY_PRESERVATION_PROMPT = """You are a strict, consistent image-edit evaluator.
+You will be given an original/reference image and a candidate output image.
+
+Score ONLY this criterion on a 1-10 integer scale:
+
+policy_preservation: Whether the candidate preserves the original scene's core
+structure and function. Compare against the reference image. Penalize removal
+or severe distortion of roads, buildings, sidewalks, vehicles, street layout,
+vegetation layout, utility poles/wires, doors/windows, building envelopes, or
+essential infrastructure. Reward edits that keep the original scene recognizable
+and operational while changing only the intended local appearance.
+
+Do not score visual quality or scene realism here unless the issue changes or
+damages the original scene's core structure/function.
+
+Return ONLY valid JSON with exactly this key:
+{"policy_preservation": <1-10 integer>}
+"""
+
 JUDGE_DEFINITION = """Score exactly these two revised criteria.
 
 1) visual_quality:

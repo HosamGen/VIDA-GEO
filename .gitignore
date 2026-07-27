@@ -4,6 +4,7 @@ outputs/
 test_set/
 baselines/
 slurm_logs/
+slurm/
 
 # Local experiment history and agent state
 archive/
