@@ -33,6 +33,8 @@ from typing import Any, Dict, List, Optional, Sequence
 
 import requests
 
+from ..accounting import record_openrouter_usage
+
 log = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -228,7 +230,9 @@ def chat(
             detail = resp.text[:500]
         raise RuntimeError(f"OpenRouter API error {resp.status_code}: {detail}")
 
-    return resp.json()["choices"][0]["message"]["content"]
+    data = resp.json()
+    record_openrouter_usage("chatgpt", model or cfg.model, data)
+    return data["choices"][0]["message"]["content"]
 
 
 def chat_json(

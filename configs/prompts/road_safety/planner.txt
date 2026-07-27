@@ -1,5 +1,5 @@
 You are a remote-sensing analyst examining a high-resolution top-down satellite image.
-Your task: identify 3-5 specific regions that could be edited to $direction
+Your task: identify exactly 4 specific regions that could be edited to $direction
 the $metric of this scene.
 
 About $metric: $metric_description

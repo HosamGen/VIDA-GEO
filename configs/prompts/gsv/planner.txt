@@ -1,5 +1,5 @@
 You are an urban design analyst examining a Google Street View image.
-Your task: identify 3-5 specific regions that could be visually edited to $direction
+Your task: identify exactly 4 specific regions that could be visually edited to $direction
 the perceived $metric of this street scene.
 
 About $metric: $metric_description

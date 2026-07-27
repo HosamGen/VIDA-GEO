@@ -227,6 +227,8 @@ class EpochRunner:
     def _final_result(self, base_score: float, payload: dict) -> dict:
         best, best_score = None, base_score
         for c in self._all_candidates:
+            if not c.get("is_improvement"):
+                continue
             ns = c.get("new_score")
             if ns is None or math.isnan(float(ns)):
                 continue
@@ -237,7 +239,7 @@ class EpochRunner:
                        "edit_prompt": c.get("edit_prompt"), "editor": c.get("editor"),
                        "region_id": c.get("region_id"), "epoch": c.get("epoch"),
                        "is_improvement": c.get("is_improvement", False)}
-                      for c in self._all_candidates]
+                      for c in self._all_candidates if c.get("is_improvement")]
         result = {"run_root": str(self.run_root), "image_in": self.image_path,
                   "domain": self.domain, "score_key": self.spec.score_key, "goal": self.cfg.goal,
                   "n_epochs_run": len({c.get("epoch") for c in self._all_candidates}),

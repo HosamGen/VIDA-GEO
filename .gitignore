@@ -3,6 +3,14 @@ outputs/
 *_runs/
 test_set/
 baselines/
+slurm_logs/
+
+# Local experiment history and agent state
+archive/
+.agents/
+.codex/
+clean_llm_judge/
+old_*
 
 # Model weights / checkpoints (live with their servers, never in this repo)
 *.pth

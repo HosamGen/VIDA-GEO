@@ -20,6 +20,7 @@ from typing import Any, Dict, Optional
 
 import requests
 
+from ..accounting import record_openrouter_usage
 from ..llm.openrouter import post_with_retry
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -128,7 +129,9 @@ def gemini_edit(
             detail = resp.text[:500]
         raise RuntimeError(f"OpenRouter API error {resp.status_code}: {detail}")
 
-    choices = resp.json().get("choices", [])
+    data = resp.json()
+    record_openrouter_usage("nanobanana", cfg.model, data)
+    choices = data.get("choices", [])
     if not choices:
         raise RuntimeError("OpenRouter returned no choices.")
     message = choices[0].get("message", {})

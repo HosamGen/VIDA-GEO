@@ -13,6 +13,7 @@ edit with the best score change — all validated by quality-control agents.
 - [Overview](#overview)
 - [Domains](#domains)
 - [Architecture](#architecture)
+- [Prompt Reference](#prompt-reference)
 - [Environment Setup](#environment-setup)
 - [Model Servers](#model-servers)
 - [Running](#running)
@@ -72,6 +73,32 @@ Two model roles, set independently:
 - **Reasoning model** (planning, policy, suggestion, QC) — OpenRouter, env
   `OPENROUTER_MODEL`.
 - **Editor model** (Gemini image edit/removal) — OpenRouter, env `GEMINI_EDIT_MODEL`.
+
+## Prompt Reference
+
+The complete prompt catalog—including initial and later-epoch planning, policy
+review, text-segmentation requests, generation suggestions, Gemini image-edit
+instructions, mask QC, edit QC, and their modality-specific variants—is available
+on the [**Pipeline Prompt Reference**](docs/PROMPTS.md) page.
+
+The page is generated directly from the committed prompt templates so its stable
+system prompts remain synchronized with `configs/prompts/`:
+
+```shell
+python scripts/build_prompt_reference.py
+```
+
+For a full Qwen3-VL visual-quality and scene-realism evaluation, use the
+self-contained evaluator in [`llm_judge/qwen3vl_evaluate.py`](llm_judge/qwen3vl_evaluate.py).
+Its default provider, backend, and model are OpenRouter, Chat Completions, and
+`qwen/qwen3-vl-32b-instruct`:
+
+```shell
+export OPENROUTER_API_KEY="sk-or-..."
+python llm_judge/qwen3vl_evaluate.py \
+  --inputs benchmark_pairs.xlsx \
+  --out llm_judge_results_qwen3vl.csv
+```
 
 ## Environment Setup
 

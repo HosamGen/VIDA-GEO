@@ -68,8 +68,17 @@ def _parse_plan(raw: str, *, allow_empty_on_fail: bool) -> dict:
         raise
 
 
-def _finalize_regions(plan: dict) -> dict:
-    for r in plan.get("regions", []):
+def _finalize_regions(plan: dict, *, max_regions: int) -> dict:
+    regions = list(plan.get("regions", []))
+    if len(regions) > max_regions:
+        log.info(
+            "planner proposed %d regions; keeping the first %d",
+            len(regions),
+            max_regions,
+        )
+        regions = regions[:max_regions]
+    plan["regions"] = regions
+    for r in regions:
         r.setdefault("edit_type", "replace")
         r.setdefault("perception_potential", "medium")
         r["seg_keyword"] = refine_seg_keyword(r)
@@ -105,13 +114,13 @@ def describe_and_plan(
         metric_description=h["description"], edit_examples=edit_examples,
         score_ctx=score_ctx,
     )
-    user_text = (f"Identify 3-5 regions to {direction} the perceived "
+    user_text = (f"Identify exactly 4 regions to {direction} the perceived "
                  f"{spec.score_key}. Respond with JSON only.")
 
     raw = chat(system, user_text, images=[image_path],
                cfg=cfg or LLMConfig(max_tokens=2000, temperature=0.2))
     plan = _parse_plan(raw, allow_empty_on_fail=False)
-    return _finalize_regions(plan)
+    return _finalize_regions(plan, max_regions=4)
 
 
 def replan_epoch(
@@ -166,7 +175,7 @@ def replan_epoch(
     raw = chat(system, user_text, images=[image_path],
                cfg=cfg or LLMConfig(max_tokens=2000, temperature=0.2))
     plan = _parse_plan(raw, allow_empty_on_fail=True)
-    return _finalize_regions(plan)
+    return _finalize_regions(plan, max_regions=3)
 
 
 # ── segmentation keyword refinement ─────────────────────────────────────────

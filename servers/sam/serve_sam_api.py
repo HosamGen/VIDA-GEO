@@ -5,6 +5,7 @@ import base64
 import io
 import json
 import os
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import numpy as np
@@ -20,6 +21,10 @@ from sam_predictor import SamService, mask_to_png_bytes
 logger = logging.getLogger("sam_api")
 
 sam_service: Optional[SamService] = None
+
+SERVER_DIR = Path(__file__).resolve().parent
+DEFAULT_MODEL_TYPE = "vit_h"
+DEFAULT_CHECKPOINT = SERVER_DIR / "checkpoints" / "sam_vit_h_4b8939.pth"
 
 # Public SAM checkpoint URLs (ungated — no HF token needed), keyed by model type.
 SAM_CHECKPOINT_URLS = {
@@ -93,8 +98,8 @@ async def lifespan(app: FastAPI):
     logger.info("Using sam_predictor from: %s", getattr(sp, "__file__", "<unknown>"))
     logger.info("Server CWD: %s", os.getcwd())
 
-    checkpoint = os.environ.get("SAM_CHECKPOINT") or "checkpoints/sam_vit_h_4b8939.pth"
-    model_type = os.environ.get("SAM_MODEL_TYPE", "vit_h")
+    checkpoint = os.environ.get("SAM_CHECKPOINT") or str(DEFAULT_CHECKPOINT)
+    model_type = os.environ.get("SAM_MODEL_TYPE", DEFAULT_MODEL_TYPE)
     device = os.environ.get("SAM_DEVICE")  # optional: "cpu", "cuda", "cuda:0", etc.
 
     # Download the (ungated) checkpoint automatically if it isn't on disk yet.
