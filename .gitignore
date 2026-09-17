@@ -1,9 +1,42 @@
 # VIDA-GEO outputs (runs, logs, generated images)
 outputs/
 *_runs/
+benchmark_outputs/
+results/
+final_results/
+evaluation_ready/
+llm_judge_results*
+*.log
+*.out
+*.err
+
+# Local datasets and experiments (keep source code and prompt assets tracked)
+benchmark_images/
 test_set/
 baselines/
+tests/
+comparison-survey/
+llm_judge/
+
+# Bootstrap, rescoring, comparison, and reporting helpers
+/scripts/bootstrap*.py
+/scripts/*bootstrap*.py
+/scripts/build_openai_retry_manifest.py
+/scripts/build_quality_realism_full_sheet.py
+/scripts/build_revised_judge_manifest.py
+/scripts/compare_revised_judges.py
+/scripts/manage_revised_judge_cohort.py
+/scripts/merge_revised_judge_with_frozen_policy.py
+/scripts/select_revised_best_outputs.py
+/check_gpt52_*.sh
+/check_qwen_revised*.py
+/run_*gpt52*.sh
+/run_qwen_revised*.py
+/run_qwen_revised*.sh
+
+# Machine-specific job launchers and logs
 slurm_logs/
+direct_logs/
 slurm/
 /run_gsv_benchmark.sh
 /run_satellite_benchmark.sh
@@ -38,6 +71,14 @@ dist/
 venv/
 env/
 .env
+.env.*
+!.env.example
+!.env.*.example
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
 # Editor / OS
 .vscode/

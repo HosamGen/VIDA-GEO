@@ -298,16 +298,19 @@ def write_csv_atomic(path: Path, rows: Dict[tuple, Dict[str, Any]]) -> None:
 
 
 def health_check(metric: str) -> None:
+    def health_url(variable: str, default: str) -> str:
+        return os.environ.get(variable, default).rstrip("/") + "/health"
+
     scorer = (
-        ("greenery", "http://127.0.0.1:8006/health")
+        ("greenery", health_url("GREENERY_URL", "http://127.0.0.1:8006"))
         if metric == "greenery"
-        else ("risk", "http://127.0.0.1:8003/health")
+        else ("risk", health_url("RISK_URL", "http://127.0.0.1:8003"))
     )
     endpoints = (
         scorer,
-        ("lisat", "http://127.0.0.1:8001/health"),
-        ("sam3", "http://127.0.0.1:8005/health"),
-        ("sam", "http://127.0.0.1:8004/health"),
+        ("lisat", health_url("LISAT_URL", "http://127.0.0.1:8001")),
+        ("sam3", health_url("SAM3_URL", "http://127.0.0.1:8005")),
+        ("sam", health_url("SAM_URL", "http://127.0.0.1:8004")),
     )
     failures = []
     for name, url in endpoints:

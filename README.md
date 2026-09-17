@@ -16,6 +16,7 @@ edit with the best score change — all validated by quality-control agents.
 - [Prompt Reference](#prompt-reference)
 - [Environment Setup](#environment-setup)
 - [Model Servers](#model-servers)
+- [Benchmark Locations](#benchmark-locations)
 - [Running](#running)
 - [Outputs](#outputs)
 - [Acknowledgements](#acknowledgements)
@@ -88,26 +89,13 @@ system prompts remain synchronized with `configs/prompts/`:
 python scripts/build_prompt_reference.py
 ```
 
-For a full Qwen3-VL realism, policy-preservation, and visual-quality evaluation,
-use the self-contained evaluator in
-[`llm_judge/qwen3vl_evaluate.py`](llm_judge/qwen3vl_evaluate.py).
-Its default provider, backend, and model are OpenRouter, Chat Completions, and
-`qwen/qwen3-vl-32b-instruct`:
-
-```shell
-export OPENROUTER_API_KEY="sk-or-..."
-python llm_judge/qwen3vl_evaluate.py \
-  --inputs benchmark_pairs.xlsx \
-  --out llm_judge_results_qwen3vl.csv
-```
-
 ## Environment Setup
 
 The agent environment is intentionally minimal — it talks to model servers over
 HTTP and needs **no** deep-learning libraries.
 
 ```shell
-git clone <repository-url> VIDA-GEO
+git clone https://github.com/HosamGen/VIDA-GEO.git
 cd VIDA-GEO
 conda create -n vida-geo python=3.10 -y
 conda activate vida-geo
@@ -148,15 +136,21 @@ Which servers each domain needs:
 - **GSV domains:** perception (8111), SAM3 (8005), SAM (8004), FLUX (8002, unless `--disable_flux`).
 - **Satellite domains:** risk **or** greenery (8003 / 8006), LISAt (8001), SAM (8004), SAM3 (8005), FLUX (8002, unless `--disable_flux`).
 
-## Benchmark Data
+## Benchmark Locations
 
-The benchmark images are not distributed in this repository. Place an
-authorized local copy under `benchmark_images/<metric>/`. The data-free
-[benchmark manifest](benchmark_images/benchmark_manifest.csv) records the
-expected split, relative filename, coordinates, image dimensions, and GSV
-camera heading for all 800 inputs. See
-[benchmark_images/README.md](benchmark_images/README.md) for the layout and
-field definitions.
+The [Benchmark Locations and Viewing Directions](benchmark_locations/README.md)
+catalog contains one TSV per metric, covering all **800 unique benchmark
+images (100 per metric)**. Each row records the exact image name, latitude,
+longitude, Street View heading where applicable, available panorama ID, and
+image dimensions. The catalog documents metadata provenance
+and the additional acquisition settings needed to reproduce the original views.
+
+Provide your own input images through `--image`. For the batch runners below,
+place your local benchmark images under `benchmark_images/` or pass the relevant
+input-path options. Image files, generated outputs, evaluation results, bootstrap
+and reporting tools, comparison surveys, baselines, and `tests/` are excluded
+from Git. The published source includes the pipeline's own mask and edit QC
+agents; the separate post-run LLM judge is excluded.
 
 ## Running
 
@@ -187,6 +181,33 @@ python -m vida_geo.cli --image path/to/img.jpg --domain boring --goal worsen
 | `--disable_flux`      | Drop FLUX from the editor set                          | off |
 | `--disable_gemini`    | Drop Gemini from the editor set                        | off |
 | `--output_root`       | Override output directory                              | `outputs/<domain>_runs` |
+
+### Batch runs
+
+The optional batch runners invoke the same pipeline in a fresh process per
+image and resume completed jobs. They expect the original benchmark layout and
+filenames ending in latitude and longitude; they are not general folder scanners.
+Use `--dry-run` to validate inputs before calling models.
+
+```shell
+python scripts/run_gsv_benchmark.py --help
+python scripts/run_satellite_benchmark.py --help
+```
+
+For GSV, supply `--manifest path/to/experiment_manifest.csv` with columns
+`metric,image_path,number,metric_score` (`number` and `metric_score` may be blank),
+plus `--extra-root path/to/extra_images` containing a subdirectory for each chosen
+metric. Those subdirectories may be empty when all images are in the manifest.
+Image paths in the manifest are resolved from the working directory. The default
+selection is 100 images per metric; use `--metrics` and `--limit-per-metric` for a
+smaller local set.
+
+For satellite images, supply `--benchmark-root path/to/benchmark_images` and
+`--metric greenery` or `--metric road_risk`. The runner reads the matching metric
+subdirectory; `road_risk` maps to the pipeline's `road_safety` domain. Images with
+`forced-reference` in the filename are excluded unless
+`--include-forced-reference` is set. Both batch runners use Gemini only and
+write their summaries under the ignored `outputs/` directory by default.
 
 ## Outputs
 

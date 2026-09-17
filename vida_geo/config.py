@@ -39,11 +39,12 @@ def load_services(path: Optional[str] = None) -> dict:
 
 
 def _svc(cls, name: str, services: dict):
-    """Build a client config from services.yaml, letting the class env-var defaults win
-    only when the yaml omits a field."""
+    """Build a client config with explicit environment URLs overriding YAML."""
     entry = (services.get("services") or {}).get(name, {}) or {}
     cfg = cls()
-    if entry.get("url"):
+    # The client dataclass already reads <SERVICE>_URL. Keep that value when
+    # explicitly set; services.yaml supplies the deployment default otherwise.
+    if entry.get("url") and not os.getenv(f"{name.upper()}_URL"):
         cfg.url = entry["url"]
     if entry.get("timeout_s"):
         cfg.timeout_s = int(entry["timeout_s"])

@@ -16,14 +16,15 @@ GPU_LISAT=${GPU_LISAT:-1}
 GPU_SAM=${GPU_SAM:-1}
 GPU_SAM3=${GPU_SAM3:-1}
 GPU_FLUX=${GPU_FLUX:-2}        # FLUX wants a GPU to itself
-SERVERS_DIR=${SERVERS_DIR:-servers}
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+SERVERS_DIR=${SERVERS_DIR:-"$SCRIPT_DIR/../servers"}
 # --------------------------------------------------------------------------
 
 launch () {  # name gpu port module env
   local name=$1 gpu=$2 port=$3 module=$4 env=$5
   echo "starting $name on GPU $gpu :$port (env=$env)"
   CUDA_VISIBLE_DEVICES=$gpu conda run -n "$env" \
-    python -m uvicorn "$SERVERS_DIR.$module:app" \
+    python -m uvicorn "$module:app" --app-dir "$SERVERS_DIR/$name" \
     --host 127.0.0.1 --port "$port" --workers 1 &
 }
 
@@ -33,7 +34,7 @@ launch sam3       $GPU_SAM3       8005  serve_sam3_api        sam3
 launch sam        $GPU_SAM        8004  serve_sam_api         sam
 launch flux       $GPU_FLUX       8002  serve_flux_fill_api   flux
 # satellite-only (start when running road_safety / greenery):
-# launch risk     $GPU_RISK       8003  serve_risk_api        beta
+# launch risk     $GPU_RISK       8003  serve_risk_offline_api beta
 # launch greenery $GPU_GREENERY   8006  serve_greenery_api    greenery
 # launch lisat    $GPU_LISAT      8001  serve_lisat_api       lisat
 

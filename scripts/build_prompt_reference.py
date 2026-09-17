@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import ast
-import json
 from pathlib import Path
-import runpy
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -91,15 +89,6 @@ Rules:
 GEMINI_REMOVE = """Remove the {region_label} from the highlighted/masked area. Fill naturally with the surrounding background — match textures, lighting, and perspective seamlessly."""
 
 
-def judge_spec() -> dict:
-    """Load the tracked, self-contained judge specification without invoking main."""
-    namespace = runpy.run_path(str(ROOT / "llm_judge" / "qwen3vl_evaluate.py"))
-    return {
-        "prompt": namespace["JUDGE_PROMPT"],
-        "schema": namespace["schema"](),
-    }
-
-
 def prompt_details(group: str, stage: str, summary: str | None = None) -> str:
     path = PROMPTS_ROOT / group / f"{stage}.txt"
     source = f"../configs/prompts/{group}/{stage}.txt"
@@ -111,12 +100,11 @@ def prompt_details(group: str, stage: str, summary: str | None = None) -> str:
 
 
 def build() -> str:
-    judge = judge_spec()
     parts = [
         "# VIDA-GEO Pipeline Prompt Reference",
         "",
         "This page documents the complete stable prompts used by the VIDA-GEO "
-        "agent pipeline and its LLM-as-judge evaluation. Prompts are reproduced "
+        "agent pipeline. Prompts are reproduced "
         "verbatim from their tracked sources and can be expanded below. Dynamic "
         "scene data, region history, scores, and constraints are appended at "
         "runtime and are intentionally not repeated as placeholder templates.",
@@ -228,55 +216,6 @@ def build() -> str:
         for stage in SATELLITE_SPECIALIZED_STAGES:
             parts.extend([prompt_details(group, stage), ""])
 
-    parts.extend([
-        "## LLM-as-judge prompts and protocol",
-        "",
-        "Benchmark judging compares two images in a fixed order: the "
-        "**original/reference image first**, followed by the **edited/output "
-        "image**. Following the paired-image benchmark evaluator, one strict "
-        "Qwen3-VL request scores all three criteria together: "
-        "`realism`, `policy_preservation`, and `visual_quality`.",
-        "",
-        markdown_details(
-            "Qwen3-VL three-criterion judge prompt (complete)",
-            fenced(judge["prompt"]),
-        ),
-        "",
-        "### Qwen3-VL request details",
-        "",
-        "| Setting | Value |",
-        "|---|---|",
-        "| Script | [`llm_judge/qwen3vl_evaluate.py`](../llm_judge/qwen3vl_evaluate.py) |",
-        "| Default provider / endpoint style | OpenRouter / Chat Completions |",
-        "| Default model | `qwen/qwen3-vl-32b-instruct` |",
-        "| API-key environment variable | `OPENROUTER_API_KEY` |",
-        "| Image order | Original/reference, then edited/output |",
-        "| Image preprocessing | Preserve aspect ratio; resize only when the longest side exceeds 1024 px; JPEG quality 92 |",
-        "| Temperature | `0.0` |",
-        "| Maximum output tokens | `800` |",
-        "| Structured output | Strict JSON Schema |",
-        "| Default retries / workers | 4 retries / 1 worker |",
-        "",
-        "The exact structured-output schema is:",
-        "",
-        fenced(json.dumps(judge["schema"], indent=2), "json"),
-        "",
-        "The evaluator validates all three scores as integers from 1 through 10, "
-        "records input/output/total token usage and errors, resumes from an "
-        "existing output CSV, and calculates `llm_judge_avg` as the arithmetic "
-        "mean of `realism`, `policy_preservation`, and `visual_quality`. Every "
-        "criterion is recomputed by the same request; no policy score is copied "
-        "from the input.",
-        "",
-        "This three-score CSV schema is incompatible with the older two-score "
-        "output. Use a new or empty `--out` path when switching protocols; the "
-        "evaluator rejects an older header rather than appending misaligned rows.",
-        "",
-        "Print the exact active judge prompt without making an API request:",
-        "",
-        fenced("python llm_judge/qwen3vl_evaluate.py --print_prompt", "shell"),
-        "",
-    ])
     return "\n".join(parts).rstrip() + "\n"
 
 
