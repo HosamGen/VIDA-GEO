@@ -9,7 +9,7 @@ edit with the best score change — all validated by quality-control agents.
 
 ---
 
-Complete prompts for all generative models and LLM judges: https://github.com/HosamGen/VIDA-GEO/blob/main/docs/PROMPTS.md
+Complete prompts for all generative models and LLM judges: [**Pipeline Prompt Reference**](docs/PROMPTS.md) 
 
 ---
 ## Contents
