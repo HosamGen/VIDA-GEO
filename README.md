@@ -23,6 +23,7 @@ Complete prompts for all generative models and LLM judges: [**Pipeline Prompt Re
 - [Running](#running)
 - [Outputs](#outputs)
 - [Acknowledgements](#acknowledgements)
+- [Citation](#citation)
 
 ---
 
@@ -239,3 +240,10 @@ VIDA-GEO builds on these open-source models and tools, each run as a server:
 + [LISAt_code](https://github.com/lisat-bair/LISAt_code) — language-instructed segmentation for satellite imagery.
 + [SAM3](https://github.com/facebookresearch/sam3) and [Segment Anything](https://github.com/facebookresearch/segment-anything) — text-referred and point-prompt segmentation.
 + [FLUX.1 Fill](https://github.com/black-forest-labs/flux) — masked image inpainting editor.
+
+
+## Citation
+
+please cite using this BibTeX:
+```bibtex
+```
