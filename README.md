@@ -246,4 +246,13 @@ VIDA-GEO builds on these open-source models and tools, each run as a server:
 
 please cite using this BibTeX:
 ```bibtex
+@misc{elgendy2026pixelspolicymultiagentintervention,
+      title={From Pixels to Policy: A Multi-Agent System for Intervention and Geo-Spatial Decision Support}, 
+      author={Hosam Elgendy and Utkarsh Mall},
+      year={2026},
+      eprint={2610.01870},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2610.01870}, 
+}
 ```
